@@ -1,0 +1,11 @@
+{
+    "data": [
+        {"id": "1011","code": "f230fh0g3","name": "Bamboo Charlet","description": "Product Description","image": "/img/building/nbte-4.jpeg","price": 65000,"category": "Kaduna","quantity": 24,"inventoryStatus": "AVAILABLE","rating": 5},
+        {"id": "1012","code": "f230fh0g3","name": "Bamboo Charlet","description": "Product Description","image": "/img/building/nbte-4.jpeg","price": 65000,"category": "Kaduna","quantity": 24,"inventoryStatus": "FEATURED","rating": 4},
+        {"id": "1013","code": "f230fh0g3","name": "Bamboo Charlet","description": "Product Description","image": "/img/building/nbte-4.jpeg","price": 65000,"category": "Kaduna","quantity": 24,"inventoryStatus": "BOOKED","rating": 3},
+        {"id": "1014","code": "f230fh0g3","name": "Bamboo Charlet","description": "Product Description","image": "/img/building/nbte-4.jpeg","price": 65000,"category": "Kaduna","quantity": 24,"inventoryStatus": "AVAILABLE","rating": 5},
+        {"id": "1015","code": "f230fh0g3","name": "Bamboo Charlet","description": "Product Description","image": "/img/building/nbte-4.jpeg","price": 65000,"category": "Kaduna","quantity": 24,"inventoryStatus": "FEATURED","rating": 4},
+        {"id": "1000","code": "f230fh0g3","name": "Bamboo Charlet","description": "Product Description","image": "/img/building/nbte-4.jpeg","price": 65000,"category": "Kaduna","quantity": 24,"inventoryStatus": "BOOKED","rating": 3}
+    ]
+}
+    
