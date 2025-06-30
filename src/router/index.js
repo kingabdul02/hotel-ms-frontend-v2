@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import AppLayout from '@/layout/AppLayout.vue';
 import BookingLayout from '@/layout/booking/BookingLayout.vue';
+
 import DashboardLandingLayout from '@/layout/dashboard-landing/DashboardLandingLayout.vue';
 import store from '../store/store';
 import { 
@@ -92,9 +93,15 @@ const routes = [
             {
                 path: '/admin/booking/management',
                 name: 'managebookings',
-                component: () => import('@/views/ManageBookings.vue'),
+                component: () => import('@/components/BookingManagement/BookingManagement.vue'),
                 meta: { auth: true }
             },
+            {
+                path: '/corporate-bill/:reservation_code',
+                name: 'CorporateBill',
+                component: () => import('@/components/BookingManagement/CorporateBill.vue'),
+                meta: { auth: true }
+              },
             {
                 path: '/admin/booking/manage/listings',
                 name: 'managelistings',
