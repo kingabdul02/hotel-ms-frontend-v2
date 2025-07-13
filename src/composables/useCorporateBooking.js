@@ -22,10 +22,12 @@ export function useCorporateBooking() {
     company: { name: '', address: '', phone: '', email: '' },
     coordinator: { full_name: '', email: '', phone: '', nin: '', id_card_file: null },
     guests: [],
-    expected_guests: 0 // Initialize expected_guests
+    expected_guests: 0, // Initialize expected_guests
+    halls: [] // Initialize halls array
   });
   const selectedCompany = ref(null);
   const availableRooms = ref([]);
+  const availableHalls = ref([]);
   const companies = ref([]);
   const filteredCompanies = ref([]);
 
@@ -92,7 +94,16 @@ export function useCorporateBooking() {
           is_checked_in: guest.is_checked_in || false,
           is_checked_out: guest.is_checked_out || false
         })),
-        expected_guests: booking.expected_guests || booking.guests.length // Use backend's expected_guests
+        expected_guests: booking.expected_guests || booking.guests.length, // Use backend's expected_guests
+        halls: booking.halls ? booking.halls.map(hall => ({
+          id: hall.id,
+          hall_id: hall.hall_id,
+          hall_name: hall.hall?.name || '',
+          start_date: hall.start_date,
+          end_date: hall.end_date,
+          amount: hall.amount || 0,
+          hall_price: hall.hall?.price || 0
+        })) : []
       });
       selectedCompany.value = booking.company?.registration_number ? booking.company : null;
       return booking;
@@ -152,6 +163,19 @@ export function useCorporateBooking() {
     }
   };
 
+  const fetchAvailableHalls = async () => {
+    const userData = JSON.parse(localStorage.getItem('userData'));
+    const token = userData?.token;
+    try {
+      const response = await axiosInstance.get('/halls', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      availableHalls.value = response.data?.data || [];
+    } catch (error) {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch available halls', life: 3000 });
+    }
+  };
+
   const fetchCompanies = async () => {
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
@@ -191,6 +215,22 @@ export function useCorporateBooking() {
     corporateBookingForm.guests.splice(index, 1);
   };
 
+  const addHall = () => {
+    corporateBookingForm.halls.push({
+      id: `hall-${Date.now()}-${Math.random()}`,
+      hall_id: null,
+      hall_name: '',
+      start_date: null,
+      end_date: null,
+      amount: 0,
+      hall_price: 0
+    });
+  };
+
+  const removeHall = (index) => {
+    corporateBookingForm.halls.splice(index, 1);
+  };
+
   const resetCorporateBookingForm = () => {
     Object.assign(corporateBookingForm, {
       is_new_company: true,
@@ -199,10 +239,12 @@ export function useCorporateBooking() {
       company: { name: '', address: '', phone: '', email: '' },
       coordinator: { full_name: '', email: '', phone: '', nin: '', id_card_file: null },
       guests: [],
-      expected_guests: 0
+      expected_guests: 0,
+      halls: []
     });
     selectedCompany.value = null;
     availableRooms.value = [];
+    availableHalls.value = [];
   };
 
   const submitCorporateBooking = async () => {
@@ -382,17 +424,21 @@ export function useCorporateBooking() {
     corporateBookingForm,
     selectedCompany,
     availableRooms,
+    availableHalls,
     companies,
     filteredCompanies,
     fetchCorporateBookings,
     fetchBookingById,
     updateCorporateBooking,
     fetchAvailableRooms,
+    fetchAvailableHalls,
     fetchCompanies,
     searchCompanies,
     onCompanySelect,
     addGuest,
     removeGuest,
+    addHall,
+    removeHall,
     resetCorporateBookingForm,
     submitCorporateBooking,
     toggleBookingExpansion,

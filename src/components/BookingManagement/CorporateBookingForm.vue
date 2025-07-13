@@ -23,13 +23,17 @@ const {
   corporateBookingForm,
   selectedCompany,
   availableRooms,
+  availableHalls,
   filteredCompanies,
   fetchCompanies,
   fetchAvailableRooms,
+  fetchAvailableHalls,
   searchCompanies,
   onCompanySelect,
   addGuest,
   removeGuest,
+  addHall,
+  removeHall,
   resetCorporateBookingForm,
   submitCorporateBooking,
   toast
@@ -46,7 +50,7 @@ const expectedGuests = ref<number | null>(null);
 
 // Active tab management
 const activeIndex = ref(0);
-const totalTabs = 5;
+const totalTabs = 6;
 
 // NIN validation regex (assuming Nigerian NIN is 11 digits)
 const ninRegex = /^\d{11}$/;
@@ -91,7 +95,11 @@ const tabValidation = computed(() => {
                ),
       errors: []
     },
-    4: { // Summary
+    4: { // Halls
+      isValid: true, // Halls are optional
+      errors: []
+    },
+    5: { // Summary
       isValid: true,
       errors: []
     }
@@ -132,12 +140,14 @@ const tabLabels = [
   'Company Information', 
   'Coordinator',
   'Guests',
+  'Halls',
   'Summary'
 ];
 
 // Enhanced summary calculations
 const bookingSummary = computed(() => {
   const guests = corporateBookingForm.guests;
+  const halls = corporateBookingForm.halls;
   const checkInDate = corporateBookingForm.check_in_date;
   const checkOutDate = corporateBookingForm.check_out_date;
   const rooms = availableRooms.value || availableRooms;
@@ -147,10 +157,16 @@ const bookingSummary = computed(() => {
   const nights = checkInDate && checkOutDate ? 
     Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)) : 0;
   
-  const totalCost = guests.reduce((total, guest) => {
+  const totalRoomCost = guests.reduce((total, guest) => {
     const room = rooms.find(r => r.id === guest.room_id);
     return total + (room ? room.price * nights : 0);
   }, 0);
+
+  const totalHallCost = halls.reduce((total, hall) => {
+    return total + (hall.amount || 0);
+  }, 0);
+
+  const totalCost = totalRoomCost + totalHallCost;
 
   const roomBreakdown = guests.reduce((breakdown, guest) => {
     const room = rooms.find(r => r.id === guest.room_id);
@@ -172,12 +188,28 @@ const bookingSummary = computed(() => {
     return breakdown;
   }, []);
 
+  const hallBreakdown = halls.map(hall => {
+    const hallInfo = availableHalls.value.find(h => h.id === hall.hall_id);
+    return {
+      hall_id: hall.hall_id,
+      hall_name: hall.hall_name || hallInfo?.name || 'Unknown Hall',
+      start_date: hall.start_date,
+      end_date: hall.end_date,
+      amount: hall.amount || 0,
+      hall_price: hall.hall_price || hallInfo?.price || 0
+    };
+  });
+
   return {
     nights,
     totalCost,
+    totalRoomCost,
+    totalHallCost,
     roomBreakdown,
+    hallBreakdown,
     guestCount: guests.length,
     roomCount: new Set(guests.map(g => g.room_id).filter(Boolean)).size,
+    hallCount: halls.length,
     expectedGuests: expectedGuests.value || 0
   };
 });
@@ -196,6 +228,30 @@ const handleAddGuest = () => {
   }
 };
 
+// Hall management functions
+const handleAddHall = () => {
+  addHall();
+};
+
+const handleRemoveHall = (index) => {
+  removeHall(index);
+};
+
+const updateHallAmount = (index) => {
+  const hall = corporateBookingForm.halls[index];
+  if (hall.hall_id && hall.start_date && hall.end_date) {
+    const hallInfo = availableHalls.value.find(h => h.id === hall.hall_id);
+    if (hallInfo) {
+      const startDate = new Date(hall.start_date);
+      const endDate = new Date(hall.end_date);
+      const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      hall.amount = Math.max(days, 1) * hallInfo.price;
+      hall.hall_price = hallInfo.price;
+      hall.hall_name = hallInfo.name;
+    }
+  }
+};
+
 // Validate NIN input
 const validateNin = (nin: string | undefined) => {
   if (!nin) return true;
@@ -206,6 +262,7 @@ watch([() => corporateBookingForm.check_in_date, () => corporateBookingForm.chec
 
 onMounted(() => {
   fetchCompanies();
+  fetchAvailableHalls();
 });
 </script>
 
@@ -561,6 +618,142 @@ onMounted(() => {
               <i class="pi pi-users text-6xl text-400 mb-3"></i>
               <p class="text-600 text-lg">No guests added yet</p>
               <p class="text-500">Click "Add Guest" to start adding guests to this booking</p>
+            </div>
+          </div>
+        </TabPanel>
+
+        <!-- Halls Tab -->
+        <TabPanel header="Halls" leftIcon="pi pi-warehouse">
+          <div class="tab-content">
+            <Message v-if="corporateBookingForm.halls.length === 0" severity="info" class="mb-4">
+              Hall booking is optional. You can add halls if needed for events or meetings.
+            </Message>
+
+            <div class="mb-4 flex align-items-center justify-content-between">
+              <Button 
+                label="Add Hall" 
+                icon="pi pi-plus" 
+                class="p-button-success" 
+                @click="handleAddHall"
+              />
+              <div class="flex align-items-center gap-2">
+                <Chip :label="`${corporateBookingForm.halls.length} Hall${corporateBookingForm.halls.length !== 1 ? 's' : ''} Selected`" />
+                <small v-if="availableHalls.length === 0" class="text-orange-500">
+                  No halls available in the system
+                </small>
+              </div>
+            </div>
+            
+            <div v-if="corporateBookingForm.halls.length > 0" class="halls-list">
+              <Card v-for="(hall, index) in corporateBookingForm.halls" :key="`hall-${index}-${hall.id || Date.now()}`" class="hall-card mb-3">
+                <template #header>
+                  <div class="flex justify-content-between align-items-center p-3">
+                    <div class="flex align-items-center gap-2">
+                      <i class="pi pi-warehouse text-primary"></i>
+                      <span class="font-semibold">Hall {{ index + 1 }}</span>
+                      <Tag v-if="hall.hall_id && hall.start_date && hall.end_date && hall.amount > 0" 
+                           value="Complete" severity="success" />
+                      <Tag v-else value="Incomplete" severity="warn" />
+                    </div>
+                    <Button
+                      icon="pi pi-trash"
+                      class="p-button-rounded p-button-danger p-button-text"
+                      @click="handleRemoveHall(index)"
+                    />
+                  </div>
+                </template>
+                <template #content>
+                  <div class="grid">
+                    <div class="col-12 md:col-6">
+                      <div class="field">
+                        <label class="form-label">Select Hall *</label>
+                        <Dropdown
+                          v-model="hall.hall_id"
+                          :options="availableHalls"
+                          optionLabel="name"
+                          optionValue="id"
+                          class="w-full"
+                          placeholder="Select a hall"
+                          @change="updateHallAmount(index)"
+                        >
+                          <template #option="slotProps">
+                            <div class="flex justify-content-between align-items-center">
+                              <span>{{ slotProps.option.name }}</span>
+                              <Chip :label="formatCurrency(slotProps.option.price) + '/day'" class="ml-2" />
+                            </div>
+                          </template>
+                        </Dropdown>
+                      </div>
+                    </div>
+                    <div class="col-12 md:col-3">
+                      <div class="field">
+                        <label class="form-label">Start Date *</label>
+                        <Calendar
+                          v-model="hall.start_date"
+                          dateFormat="yy-mm-dd"
+                          :minDate="new Date()"
+                          class="w-full"
+                          placeholder="Select start date"
+                          @date-select="updateHallAmount(index)"
+                        />
+                      </div>
+                    </div>
+                    <div class="col-12 md:col-3">
+                      <div class="field">
+                        <label class="form-label">End Date *</label>
+                        <Calendar
+                          v-model="hall.end_date"
+                          dateFormat="yy-mm-dd"
+                          :minDate="hall.start_date || new Date()"
+                          class="w-full"
+                          placeholder="Select end date"
+                          @date-select="updateHallAmount(index)"
+                        />
+                      </div>
+                    </div>
+                    <div class="col-12 md:col-6">
+                      <div class="field">
+                        <label class="form-label">Amount</label>
+                        <InputNumber
+                          v-model="hall.amount"
+                          :currency="'NGN'"
+                          locale="en-NG"
+                          :minFractionDigits="0"
+                          :maxFractionDigits="0"
+                          class="w-full"
+                          placeholder="Amount will be calculated automatically"
+                        />
+                      </div>
+                    </div>
+                    <div class="col-12 md:col-6" v-if="hall.hall_id && hall.start_date && hall.end_date">
+                      <div class="field">
+                        <label class="form-label">Calculation Details</label>
+                        <div class="calculation-details p-3 border-1 border-300 border-round">
+                          <div class="flex justify-content-between mb-2">
+                            <span>Hall Price/Day:</span>
+                            <span class="font-semibold">{{ formatCurrency(hall.hall_price) }}</span>
+                          </div>
+                          <div class="flex justify-content-between mb-2">
+                            <span>Number of Days:</span>
+                            <span class="font-semibold">{{ Math.ceil((new Date(hall.end_date).getTime() - new Date(hall.start_date).getTime()) / (1000 * 60 * 60 * 24)) }}</span>
+                          </div>
+                          <Divider />
+                          <div class="flex justify-content-between">
+                            <span class="font-semibold">Total Amount:</span>
+                            <span class="font-semibold text-primary">{{ formatCurrency(hall.amount) }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </Card>
+            </div>
+            
+            <div v-else class="text-center py-5">
+              <i class="pi pi-warehouse text-6xl text-400 mb-3"></i>
+              <p class="text-600 text-lg">No halls added yet</p>
+              <p class="text-500">Click "Add Hall" to include hall bookings for events or meetings</p>
             </div>
           </div>
         </TabPanel>
