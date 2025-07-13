@@ -1,58 +1,58 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import Card from 'primevue/card'
-import InputText from 'primevue/inputtext'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Button from 'primevue/button'
-import Tag from 'primevue/tag'
-import Dropdown from 'primevue/dropdown'
-import ProgressSpinner from 'primevue/progressspinner'
-import ConfirmDialog from 'primevue/confirmdialog'
-import Toast from 'primevue/toast'
-import Dialog from 'primevue/dialog'
-import Skeleton from 'primevue/skeleton'
-import Message from 'primevue/message'
-import StatisticsCards from './StatisticsCards.vue'
-import { useCorporateBooking } from '@/composables/useCorporateBooking'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted } from 'vue';
+import Card from 'primevue/card';
+import InputText from 'primevue/inputtext';
+import DataTable from 'primevue/datatable';
+import Column from 'primevue/column';
+import Button from 'primevue/button';
+import Tag from 'primevue/tag';
+import Dropdown from 'primevue/dropdown';
+import ProgressSpinner from 'primevue/progressspinner';
+import ConfirmDialog from 'primevue/confirmdialog';
+import Toast from 'primevue/toast';
+import Dialog from 'primevue/dialog';
+import Calendar from 'primevue/calendar';
+import { useCorporateBooking } from '@/composables/useCorporateBooking';
+import { useRouter } from 'vue-router';
+import StatisticsCards from './StatisticsCards.vue';
 
 // Types
 interface Guest {
-  id: string
-  full_name: string
-  email?: string
-  phone?: string
-  gender?: string
-  is_checked_in: boolean
-  is_checked_out: boolean
-  checked_in_at?: string
-  checked_out_at?: string
+  id: string;
+  full_name: string;
+  email?: string;
+  phone?: string;
+  gender?: string;
+  is_checked_in: boolean;
+  is_checked_out: boolean;
+  checked_in_at?: string;
+  checked_out_at?: string;
   room: {
-    id: string
-    name: string
-    price: number
-    no_of_guests?: number
-    no_of_bedrooms?: number
-    no_of_beds?: number
-    no_of_baths?: number
+    id: string;
+    name: string;
+    price: number;
+    no_of_guests?: number;
+    no_of_bedrooms?: number;
+    no_of_beds?: number;
+    no_of_baths?: number;
     images?: {
-      data: Array<{ url: string }>
-    }
+      data: Array<{ url: string }>;
+    };
     roomType?: {
-      name: string
-    }
-  }
+      name: string;
+    };
+  };
 }
 
 interface CorporateBooking {
-  id: string
+  id: string;
   coordinator?: {
-    full_name: string
-  }
-  guests: Guest[]
-  check_in_date: string
-  check_out_date: string
+    full_name: string;
+  };
+  guests: Guest[];
+  check_in_date: string;
+  check_out_date: string;
+  reservation_code: string;
 }
 
 // Composable
@@ -73,13 +73,34 @@ const {
   getTotalGuestsCount,
   confirmCheckIn,
   confirmCheckOut,
-} = useCorporateBooking()
+  corporateBookingForm,
+  selectedCompany,
+  availableRooms,
+  companies,
+  filteredCompanies,
+  fetchAvailableRooms,
+  fetchCompanies,
+  searchCompanies,
+  onCompanySelect,
+  addGuest,
+  removeGuest,
+  resetCorporateBookingForm,
+  submitCorporateBooking,
+  fetchBookingById,
+  updateCorporateBooking,
+  toast,
+  confirm,
+} = useCorporateBooking();
 
 // Reactive state
-const selectedGuest = ref<Guest | null>(null)
-const showGuestDialog = ref(false)
-const expandedRows = ref<CorporateBooking[]>([])
-const isSearching = ref(false)
+const selectedGuest = ref<Guest | null>(null);
+const showGuestDialog = ref(false);
+const expandedRows = ref<CorporateBooking[]>([]);
+const isSearching = ref(false);
+const showBookingDialog = ref(false);
+const isEditMode = ref(false);
+const bookingIdToEdit = ref<string | null>(null);
+const expectedGuests = ref(0);
 
 // Constants
 const STATUS_OPTIONS = [
@@ -87,124 +108,238 @@ const STATUS_OPTIONS = [
   { label: 'Pending', value: 'pending' },
   { label: 'In Progress', value: 'in_progress' },
   { label: 'Completed', value: 'completed' },
-] as const
+] as const;
 
-const ITEMS_PER_PAGE = 10
+const ITEMS_PER_PAGE = 10;
+
+const guestGenderOptions = [
+  { label: 'Male', value: 'Male' },
+  { label: 'Female', value: 'Female' },
+];
 
 // Computed properties
-const hasBookings = computed(() => corporateBookings.value.length > 0)
-const isEmptyState = computed(() => !loading.value && !hasBookings.value && !searchQuery.value)
-const isNoSearchResults = computed(() => !loading.value && !hasBookings.value && searchQuery.value)
+const hasBookings = computed(() => corporateBookings.value.length > 0);
+const isEmptyState = computed(() => !loading.value && !hasBookings.value && !searchQuery.value);
+const isNoSearchResults = computed(() => !loading.value && !hasBookings.value && searchQuery.value);
+const canAddGuest = computed(() => corporateBookingForm.guests.length < expectedGuests.value);
+const minExpectedGuests = computed(() => {
+  return corporateBookingForm.guests.filter(guest => guest.is_checked_in || guest.is_checked_out).length;
+});
 
 const statisticsData = computed(() => ({
   recentBookingsCount: corporateBookings.value.length,
   availableRoomCount: 0, // This should come from your API
   checkInsToday: getCheckedInCount(),
   checkOutsToday: getCheckedOutCount(),
-}))
+}));
+
+// Router
+const router = useRouter();
 
 // Methods
 const handleSearch = async () => {
-  if (isSearching.value) return
-  
-  isSearching.value = true
+  if (isSearching.value) return;
+  isSearching.value = true;
   try {
-    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 })
+    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
   } finally {
-    isSearching.value = false
+    isSearching.value = false;
   }
-}
+};
 
 const handleStatusChange = async () => {
-  await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 })
-}
+  await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
+};
 
 const showGuestDetails = (guest: Guest) => {
-  selectedGuest.value = guest
-  showGuestDialog.value = true
-}
+  selectedGuest.value = guest;
+  showGuestDialog.value = true;
+};
 
 const closeGuestDialog = () => {
-  showGuestDialog.value = false
-  selectedGuest.value = null
-}
+  showGuestDialog.value = false;
+  selectedGuest.value = null;
+};
 
 const handleRowExpand = (event: { data: CorporateBooking }) => {
-  expandedRows.value = [event.data]
-}
+  expandedRows.value = [event.data];
+};
 
 const handleRowCollapse = () => {
-  expandedRows.value = []
-}
+  expandedRows.value = [];
+};
 
 const handleCheckIn = async (guest: Guest) => {
   try {
-    await confirmCheckIn(guest)
-    // Refresh data after successful check-in
-    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 })
+    await confirmCheckIn(guest);
+    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
   } catch (error) {
-    console.error('Check-in failed:', error)
+    console.error('Check-in failed:', error);
   }
-}
+};
 
 const handleCheckOut = async (guest: Guest) => {
   try {
-    await confirmCheckOut(guest)
-    // Refresh data after successful check-out
-    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 })
+    await confirmCheckOut(guest);
+    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
   } catch (error) {
-    console.error('Check-out failed:', error)
+    console.error('Check-out failed:', error);
   }
-}
+};
+
+const openCreateBookingDialog = () => {
+  resetCorporateBookingForm();
+  expectedGuests.value = 0;
+  isEditMode.value = false;
+  bookingIdToEdit.value = null;
+  showBookingDialog.value = true;
+};
+
+const openEditBookingDialog = async (booking: CorporateBooking) => {
+  resetCorporateBookingForm();
+  bookingIdToEdit.value = booking.id;
+  isEditMode.value = true;
+  await fetchBookingById(booking.id);
+  expectedGuests.value = corporateBookingForm.guests.length;
+  showBookingDialog.value = true;
+};
+
+const closeBookingDialog = () => {
+  showBookingDialog.value = false;
+  resetCorporateBookingForm();
+  expectedGuests.value = 0;
+  bookingIdToEdit.value = null;
+  isEditMode.value = false;
+};
+
+const handleAddGuest = () => {
+  if (!canAddGuest.value) {
+    toast.add({ severity: 'warn', summary: 'Limit Reached', detail: 'Cannot add more guests than expected.', life: 3000 });
+    return;
+  }
+  addGuest();
+};
+
+const handleRemoveGuest = (index: number) => {
+  const guest = corporateBookingForm.guests[index];
+  if (guest.is_checked_in || guest.is_checked_out) {
+    toast.add({ severity: 'warn', summary: 'Cannot Remove', detail: 'Checked-in or checked-out guests cannot be removed.', life: 3000 });
+    return;
+  }
+  confirm.require({
+    message: `Are you sure you want to remove ${guest.full_name || 'this guest'}?`,
+    header: 'Confirm Guest Removal',
+    icon: 'pi pi-exclamation-triangle',
+    accept: () => {
+      removeGuest(index);
+      toast.add({ severity: 'success', summary: 'Guest Removed', detail: 'Guest has been removed.', life: 3000 });
+    },
+  });
+};
+
+const handleExpectedGuestsChange = () => {
+  const currentGuestCount = corporateBookingForm.guests.length;
+  if (expectedGuests.value < minExpectedGuests.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Invalid Input',
+      detail: `Cannot set expected guests below ${minExpectedGuests.value} (number of checked-in or checked-out guests).`,
+      life: 3000,
+    });
+    expectedGuests.value = minExpectedGuests.value;
+  } else if (expectedGuests.value < currentGuestCount) {
+    const guestsToRemove = corporateBookingForm.guests
+      .slice(expectedGuests.value)
+      .filter(guest => !guest.is_checked_in && !guest.is_checked_out);
+    if (guestsToRemove.length > 0) {
+      confirm.require({
+        message: `Reducing the number of guests will remove ${guestsToRemove.length} guest(s). Confirm?`,
+        header: 'Confirm Guest Removal',
+        icon: 'pi pi-exclamation-triangle',
+        accept: () => {
+          corporateBookingForm.guests = corporateBookingForm.guests.slice(0, expectedGuests.value);
+          toast.add({ severity: 'success', summary: 'Guests Removed', detail: 'Excess guests have been removed.', life: 3000 });
+        },
+        reject: () => {
+          expectedGuests.value = currentGuestCount;
+        },
+      });
+    }
+  }
+};
+
+const handleSubmit = async () => {
+  try {
+    if (isEditMode.value && bookingIdToEdit.value) {
+      await updateCorporateBooking(bookingIdToEdit.value, corporateBookingForm);
+    } else {
+      await submitCorporateBooking();
+    }
+    showBookingDialog.value = false;
+    resetCorporateBookingForm();
+    expectedGuests.value = 0;
+    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
+  } catch (error) {
+    // Error handled by composable's toast
+  }
+};
+
+const viewBill = (booking: CorporateBooking) => {
+  router.push({
+    name: 'CorporateBill',
+    params: { reservation_code: booking.reservation_code },
+  });
+};
 
 // Utility functions
 const formatDate = (dateString?: string): string => {
-  if (!dateString) return 'N/A'
+  if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
-  })
-}
+    year: 'numeric',
+  });
+};
 
 const formatDateTime = (dateString?: string): string => {
-  if (!dateString) return 'N/A'
+  if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+    minute: '2-digit',
+  });
+};
 
 const formatCurrency = (amount?: number): string => {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency: 'NGN',
-    minimumFractionDigits: 0
-  }).format(amount ?? 0)
-}
+    minimumFractionDigits: 0,
+  }).format(amount ?? 0);
+};
 
 const getGuestCountText = (count: number): string => {
-  return `${count} guest${count !== 1 ? 's' : ''}`
-}
-// Navigate to CorporateBill component
-const router = useRouter()
-const viewBill = (bookingOrGuest: any) => {
-  router.push({
-    name: 'CorporateBill',
-    params: { reservation_code: bookingOrGuest.reservation_code },
-  });
+  return `${count} guest${count !== 1 ? 's' : ''}`;
 };
 
 // Lifecycle
 onMounted(async () => {
-  await fetchCorporateBookings()
-})
+  await fetchCorporateBookings();
+  await fetchCompanies();
+});
 
 // Watchers
-watch(searchQuery, handleSearch, { debounce: 500 })
+watch(searchQuery, handleSearch, { debounce: 500 });
+watch(
+  () => [corporateBookingForm.check_in_date, corporateBookingForm.check_out_date],
+  () => {
+    if (corporateBookingForm.check_in_date && corporateBookingForm.check_out_date) {
+      fetchAvailableRooms();
+    }
+  }
+);
 </script>
 
 <template>
@@ -224,6 +359,13 @@ watch(searchQuery, handleSearch, { debounce: 500 })
             <span class="total-count" v-if="totalRecords > 0">
               {{ totalRecords }} total bookings
             </span>
+            <Button
+              label="Create Booking"
+              icon="pi pi-plus"
+              class="p-button-success p-button-sm"
+              @click="openCreateBookingDialog"
+              aria-label="Create new corporate booking"
+            />
           </div>
         </div>
       </template>
@@ -253,6 +395,13 @@ watch(searchQuery, handleSearch, { debounce: 500 })
             <i class="pi pi-calendar empty-icon" aria-hidden="true"></i>
             <h3>No bookings yet</h3>
             <p>Corporate bookings will appear here once they are created.</p>
+            <Button 
+              label="Create Booking" 
+              icon="pi pi-plus"
+              class="p-button-success"
+              @click="openCreateBookingDialog"
+              aria-label="Create new corporate booking"
+            />
           </div>
         </div>
 
@@ -267,6 +416,7 @@ watch(searchQuery, handleSearch, { debounce: 500 })
               icon="pi pi-times"
               class="p-button-text"
               @click="searchQuery = ''"
+              aria-label="Clear search"
             />
           </div>
         </div>
@@ -399,15 +549,25 @@ watch(searchQuery, handleSearch, { debounce: 500 })
             <!-- Actions Column -->
             <Column header="Actions">
               <template #body="slotProps">
-                <Button
-                  label="View Bill"
-                  icon="pi pi-file"
-                  class="p-button-sm p-button-outlined p-button-success"
-                  @click="viewBill(slotProps.data)"
-                />
+                <div class="action-buttons">
+                  <Button
+                    label="Edit"
+                    icon="pi pi-pencil"
+                    class="p-button-sm p-button-outlined p-button-info mr-2"
+                    @click="openEditBookingDialog(slotProps.data)"
+                    :disabled="getBookingStatus(slotProps.data) === 'Completed'"
+                    :aria-label="`Edit booking ${slotProps.data.reservation_code}`"
+                  />
+                  <Button
+                    label="View Bill"
+                    icon="pi pi-file"
+                    class="p-button-sm p-button-outlined p-button-success"
+                    @click="viewBill(slotProps.data)"
+                    :aria-label="`View bill for booking ${slotProps.data.reservation_code}`"
+                  />
+                </div>
               </template>
             </Column>
-
 
             <!-- Expansion Template -->
             <template #expansion="slotProps">
@@ -459,7 +619,6 @@ watch(searchQuery, handleSearch, { debounce: 500 })
                         @click="handleCheckIn(guest)"
                         :aria-label="`Check in ${guest.full_name}`"
                       />
-                      
                       <Button
                         v-else-if="guest.is_checked_in && !guest.is_checked_out"
                         label="Check Out"
@@ -469,12 +628,10 @@ watch(searchQuery, handleSearch, { debounce: 500 })
                         @click="handleCheckOut(guest)"
                         :aria-label="`Check out ${guest.full_name}`"
                       />
-                      
                       <div v-else class="completed-status">
                         <i class="pi pi-check-circle" aria-hidden="true"></i>
                         <span>Completed</span>
                       </div>
-
                       <Button
                         icon="pi pi-eye"
                         size="small"
@@ -504,6 +661,223 @@ watch(searchQuery, handleSearch, { debounce: 500 })
         </div>
       </template>
     </Card>
+
+    <!-- Booking Form Dialog -->
+    <Dialog
+      v-model:visible="showBookingDialog"
+      :style="{ width: '90vw', maxWidth: '1200px' }"
+      :header="isEditMode ? 'Edit Corporate Booking' : 'Create Corporate Booking'"
+      :modal="true"
+      class="booking-form-dialog"
+      :closable="true"
+      @hide="closeBookingDialog"
+    >
+      <div class="form-container">
+        <!-- Company Details -->
+        <section class="form-section">
+          <h3>Company Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Company Name</label>
+              <InputText
+                v-model="corporateBookingForm.company.name"
+                placeholder="Company name"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <InputText
+                v-model="corporateBookingForm.company.email"
+                placeholder="Company email"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <InputText
+                v-model="corporateBookingForm.company.phone"
+                placeholder="Company phone"
+                :disabled="isEditMode"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- Coordinator Details -->
+        <section class="form-section">
+          <h3>Coordinator Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Full Name</label>
+              <InputText
+                v-model="corporateBookingForm.coordinator.full_name"
+                placeholder="Full name"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <InputText
+                v-model="corporateBookingForm.coordinator.email"
+                placeholder="Email"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <InputText
+                v-model="corporateBookingForm.coordinator.phone"
+                placeholder="Phone"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>NIN</label>
+              <InputText
+                v-model="corporateBookingForm.coordinator.nin"
+                placeholder="NIN"
+                :disabled="isEditMode"
+              />
+            </div>
+            <!-- <div class="form-group">
+              <label>ID Card</label>
+              <FileUpload
+                mode="basic"
+                accept="image/*"
+                :maxFileSize="1000000"
+                @select="event => corporateBookingForm.coordinator.id_card_file = event.files[0]"
+                :disabled="isEditMode"
+              />
+            </div> -->
+          </div>
+        </section>
+
+        <!-- Booking Details -->
+        <section class="form-section">
+          <h3>Booking Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Check-in Date</label>
+              <Calendar
+                v-model="corporateBookingForm.check_in_date"
+                showIcon
+                dateFormat="yy-mm-dd"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Check-out Date</label>
+              <Calendar
+                v-model="corporateBookingForm.check_out_date"
+                showIcon
+                dateFormat="yy-mm-dd"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Expected Guests</label>
+              <InputText
+                v-model.number="expectedGuests"
+                type="number"
+                placeholder="Number of guests"
+                :min="minExpectedGuests"
+                @input="handleExpectedGuestsChange"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- Guest Details -->
+        <section class="form-section">
+          <h3>Guest Details</h3>
+          <div v-for="(guest, index) in corporateBookingForm.guests" :key="index" class="guest-section">
+            <div class="guest-header">
+              <h4>Guest {{ index + 1 }}</h4>
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                :disabled="guest.is_checked_in || guest.is_checked_out"
+                @click="handleRemoveGuest(index)"
+              />
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Full Name</label>
+                <InputText
+                  v-model="guest.full_name"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Full name"
+                />
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <InputText
+                  v-model="guest.email"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Email"
+                />
+              </div>
+              <div class="form-group">
+                <label>Phone</label>
+                <InputText
+                  v-model="guest.phone"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Phone"
+                />
+              </div>
+              <div class="form-group">
+                <label>Gender</label>
+                <Dropdown
+                  v-model="guest.gender"
+                  :options="guestGenderOptions"
+                  option-label="label"
+                  option-value="value"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Select gender"
+                />
+              </div>
+              <div class="form-group">
+                <label>Room</label>
+                <Dropdown
+                  v-model="guest.room_id"
+                  :options="availableRooms"
+                  option-label="name"
+                  option-value="id"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Select room"
+                />
+              </div>
+            </div>
+          </div>
+          <Button
+            label="Add Guest"
+            icon="pi pi-plus"
+            class="p-button-outlined p-button-success"
+            :disabled="!canAddGuest"
+            @click="handleAddGuest"
+          />
+        </section>
+      </div>
+
+      <template #footer>
+        <Button
+          label="Cancel"
+          icon="pi pi-times"
+          text
+          @click="closeBookingDialog"
+          aria-label="Cancel booking"
+        />
+        <Button
+          :label="isEditMode ? 'Update Booking' : 'Create Booking'"
+          icon="pi pi-save"
+          class="p-button-success"
+          @click="handleSubmit"
+          aria-label="Save booking"
+        />
+      </template>
+    </Dialog>
 
     <!-- Guest Details Dialog -->
     <Dialog
@@ -620,6 +994,7 @@ watch(searchQuery, handleSearch, { debounce: 500 })
           icon="pi pi-times"
           text
           @click="closeGuestDialog"
+          aria-label="Close guest details dialog"
         />
       </template>
     </Dialog>
@@ -824,6 +1199,11 @@ watch(searchQuery, handleSearch, { debounce: 500 })
   font-weight: 500;
 }
 
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
 /* Guest Expansion */
 .guests-expansion {
   padding: 1.5rem;
@@ -940,6 +1320,67 @@ watch(searchQuery, handleSearch, { debounce: 500 })
   gap: 0.5rem;
   font-size: 0.75rem;
   color: #64748b;
+}
+
+/* Booking Form Dialog */
+.booking-form-dialog {
+  border-radius: 12px;
+}
+
+.form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 1rem;
+}
+
+.form-section {
+  padding: 1rem;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.form-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.guest-section {
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.guest-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.guest-header h4 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
 }
 
 /* Guest Details Dialog */
@@ -1154,7 +1595,8 @@ watch(searchQuery, handleSearch, { debounce: 500 })
     align-items: stretch;
   }
 
-  .info-grid {
+  .info-grid,
+  .form-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1171,6 +1613,11 @@ watch(searchQuery, handleSearch, { debounce: 500 })
   .timestamp-item {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .action-buttons {
+    flex-direction: column;
     gap: 0.5rem;
   }
 }

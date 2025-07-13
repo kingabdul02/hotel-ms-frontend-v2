@@ -15,6 +15,7 @@ import Divider from 'primevue/divider';
 import Tag from 'primevue/tag';
 import ProgressBar from 'primevue/progressbar';
 import Message from 'primevue/message';
+import InputNumber from 'primevue/inputnumber';
 import { useCorporateBooking } from '@/composables/useCorporateBooking';
 import { formatCurrency } from '@/utils/currencyFormatter';
 
@@ -40,13 +41,18 @@ const genderOptions = [
   { label: 'Other', value: 'Other' }
 ];
 
+// Add expected guests field
+const expectedGuests = ref<number | null>(null);
+
 // Active tab management
 const activeIndex = ref(0);
 const totalTabs = 5;
 
-// Tab validation states - Fixed reactivity
+// NIN validation regex (assuming Nigerian NIN is 11 digits)
+const ninRegex = /^\d{11}$/;
+
+// Tab validation states
 const tabValidation = computed(() => {
-  // Force reactivity by accessing reactive properties directly
   const guests = corporateBookingForm.guests;
   const coordinator = corporateBookingForm.coordinator;
   const company = corporateBookingForm.company;
@@ -57,7 +63,7 @@ const tabValidation = computed(() => {
   
   return {
     0: { // Booking Details
-      isValid: checkIn && checkOut,
+      isValid: checkIn && checkOut && expectedGuests.value !== null && expectedGuests.value > 0,
       errors: []
     },
     1: { // Company Information
@@ -74,8 +80,14 @@ const tabValidation = computed(() => {
     },
     3: { // Guests
       isValid: guests.length > 0 && 
+               guests.length <= (expectedGuests.value || Infinity) &&
                guests.every(guest => 
-                 guest.full_name && guest.email && guest.phone && guest.gender && guest.room_id
+                 guest.full_name && 
+                 guest.email && 
+                 guest.phone && 
+                 guest.gender && 
+                 guest.room_id &&
+                 (guest.nin ? ninRegex.test(guest.nin) : true)
                ),
       errors: []
     },
@@ -94,7 +106,7 @@ const isFormValid = computed(() => {
 // Progress calculation
 const completionProgress = computed(() => {
   const validTabs = Object.values(tabValidation.value).filter(tab => tab.isValid).length;
-  return Math.round((validTabs / (totalTabs - 1)) * 100); // Exclude summary tab from calculation
+  return Math.round((validTabs / (totalTabs - 1)) * 100);
 });
 
 // Navigation methods
@@ -123,9 +135,8 @@ const tabLabels = [
   'Summary'
 ];
 
-// Enhanced summary calculations - Fixed reactivity
+// Enhanced summary calculations
 const bookingSummary = computed(() => {
-  // Force reactivity by accessing the reactive properties directly
   const guests = corporateBookingForm.guests;
   const checkInDate = corporateBookingForm.check_in_date;
   const checkOutDate = corporateBookingForm.check_out_date;
@@ -166,9 +177,30 @@ const bookingSummary = computed(() => {
     totalCost,
     roomBreakdown,
     guestCount: guests.length,
-    roomCount: new Set(guests.map(g => g.room_id).filter(Boolean)).size
+    roomCount: new Set(guests.map(g => g.room_id).filter(Boolean)).size,
+    expectedGuests: expectedGuests.value || 0
   };
 });
+
+// Modified addGuest to check against expected guests
+const handleAddGuest = () => {
+  if (corporateBookingForm.guests.length < (expectedGuests.value || Infinity)) {
+    addGuest();
+  } else {
+    toast.add({
+      severity: 'warn',
+      summary: 'Guest Limit Reached',
+      detail: `Cannot add more than ${expectedGuests.value} guests as specified`,
+      life: 3000
+    });
+  }
+};
+
+// Validate NIN input
+const validateNin = (nin: string | undefined) => {
+  if (!nin) return true;
+  return ninRegex.test(nin);
+};
 
 watch([() => corporateBookingForm.check_in_date, () => corporateBookingForm.check_out_date], fetchAvailableRooms);
 
@@ -198,11 +230,11 @@ onMounted(() => {
         <TabPanel header="Booking Details" leftIcon="pi pi-calendar">
           <div class="tab-content">
             <Message v-if="!tabValidation[0].isValid" severity="warn" class="mb-4">
-              Please select both check-in and check-out dates to proceed.
+              Please select both check-in and check-out dates and specify number of expected guests.
             </Message>
             
             <div class="grid">
-              <div class="col-12 md:col-6">
+              <div class="col-12 md:col-4">
                 <div class="field">
                   <label for="checkInDate" class="form-label">Check-In Date *</label>
                   <Calendar
@@ -215,7 +247,7 @@ onMounted(() => {
                   />
                 </div>
               </div>
-              <div class="col-12 md:col-6">
+              <div class="col-12 md:col-4">
                 <div class="field">
                   <label for="checkOutDate" class="form-label">Check-Out Date *</label>
                   <Calendar
@@ -228,6 +260,19 @@ onMounted(() => {
                   />
                 </div>
               </div>
+              <div class="col-12 md:col-4">
+                <div class="field">
+                  <label for="expectedGuests" class="form-label">Expected Guests *</label>
+                  <InputNumber
+                    id="expectedGuests"
+                    v-model="expectedGuests"
+                    :min="1"
+                    class="w-full"
+                    placeholder="Enter number of guests"
+                    :useGrouping="false"
+                  />
+                </div>
+              </div>
               <div v-if="bookingSummary.nights > 0" class="col-12">
                 <Card class="mt-3">
                   <template #content>
@@ -235,6 +280,7 @@ onMounted(() => {
                       <i class="pi pi-moon text-primary"></i>
                       <span class="font-semibold">{{ bookingSummary.nights }} night{{ bookingSummary.nights > 1 ? 's' : '' }}</span>
                       <Chip :label="`${new Date(corporateBookingForm.check_in_date).toLocaleDateString()} - ${new Date(corporateBookingForm.check_out_date).toLocaleDateString()}`" />
+                      <Chip :label="`${bookingSummary.expectedGuests} Expected Guest${bookingSummary.expectedGuests !== 1 ? 's' : ''}`" />
                     </div>
                   </template>
                 </Card>
@@ -246,7 +292,7 @@ onMounted(() => {
         <!-- Company Information Tab -->
         <TabPanel header="Company Information" leftIcon="pi pi-building">
           <div class="tab-content">
-            <Message v-if="!tabValidation[1].isValid" severity="warn" class="mb-4">
+            <Message v-if="!tabValidation[1].isValid" severity="warn" class="--mb-4">
               Please provide complete company information to proceed.
             </Message>
 
@@ -307,7 +353,7 @@ onMounted(() => {
                       id="companyPhone"
                       v-model="corporateBookingForm.company.phone"
                       class="w-full"
-                      placeholder="Enter company phone"
+ ters                  placeholder="Enter company phone"
                       :disabled="!corporateBookingForm.is_new_company"
                     />
                   </div>
@@ -379,8 +425,13 @@ onMounted(() => {
                     id="coordinatorNin"
                     v-model="corporateBookingForm.coordinator.nin"
                     class="w-full"
-                    placeholder="Enter NIN (optional)"
+                    placeholder="Enter 11-digit NIN (optional)"
+                    :class="{ 'p-invalid': corporateBookingForm.coordinator.nin && !validateNin(corporateBookingForm.coordinator.nin) }"
                   />
+                  <small v-if="corporateBookingForm.coordinator.nin && !validateNin(corporateBookingForm.coordinator.nin)" 
+                         class="p-error">
+                    NIN must be 11 digits
+                  </small>
                 </div>
               </div>
             </div>
@@ -391,13 +442,24 @@ onMounted(() => {
         <TabPanel header="Guests" leftIcon="pi pi-users">
           <div class="tab-content">
             <Message v-if="!tabValidation[3].isValid" severity="warn" class="mb-4">
-              Please add at least one guest with complete information and room assignment.
+              <span v-if="corporateBookingForm.guests.length > (expectedGuests || Infinity)">
+                Number of guests exceeds declared expected guests ({{ expectedGuests }})
+              </span>
+              <span v-else>
+                Please add at least one guest with complete information and room assignment.
+              </span>
             </Message>
 
             <div class="mb-4 flex align-items-center justify-content-between">
-              <Button label="Add Guest" icon="pi pi-plus" class="p-button-success" @click="addGuest" />
+              <Button 
+                label="Add Guest" 
+                icon="pi pi-plus" 
+                class="p-button-success" 
+                @click="handleAddGuest"
+                :disabled="corporateBookingForm.guests.length >= (expectedGuests || Infinity)"
+              />
               <div class="flex align-items-center gap-2">
-                <Chip :label="`${corporateBookingForm.guests.length} Guest${corporateBookingForm.guests.length !== 1 ? 's' : ''}`" />
+                <Chip :label="`${corporateBookingForm.guests.length} / ${expectedGuests || 0} Guest${corporateBookingForm.guests.length !== 1 ? 's' : ''}`" />
                 <small v-if="availableRooms.length === 0" class="text-orange-500">
                   Please select check-in and check-out dates first
                 </small>
@@ -411,7 +473,7 @@ onMounted(() => {
                     <div class="flex align-items-center gap-2">
                       <i class="pi pi-user text-primary"></i>
                       <span class="font-semibold">Guest {{ index + 1 }}</span>
-                      <Tag v-if="guest.full_name && guest.email && guest.phone && guest.gender && guest.room_id" 
+                      <Tag v-if="guest.full_name && guest.email && guest.phone && guest.gender && guest.room_id && (!guest.nin || validateNin(guest.nin))" 
                            value="Complete" severity="success" />
                       <Tag v-else value="Incomplete" severity="warn" />
                     </div>
@@ -438,7 +500,7 @@ onMounted(() => {
                     </div>
                     <div class="col-12 md:col-4">
                       <div class="field">
-                        <label class="form-label">Phone *</label>
+                        <label class="form-label" for="phone">Phone *</label>
                         <InputText v-model="guest.phone" class="w-full" placeholder="Enter guest phone" />
                       </div>
                     </div>
@@ -475,6 +537,21 @@ onMounted(() => {
                         </Dropdown>
                       </div>
                     </div>
+                    <div class="col-12 md:col-6">
+                      <div class="field">
+                        <label class="form-label">NIN</label>
+                        <InputText
+                          v-model="guest.nin"
+                          class="w-full"
+                          placeholder="Enter 11-digit NIN (optional)"
+                          :class="{ 'p-invalid': guest.nin && !validateNin(guest.nin) }"
+                        />
+                        <small v-if="guest.nin && !validateNin(guest.nin)" 
+                               class="p-error">
+                          NIN must be 11 digits
+                        </small>
+                      </div>
+                    </div>
                   </div>
                 </template>
               </Card>
@@ -506,8 +583,8 @@ onMounted(() => {
                     <div class="stat-label">Night{{ bookingSummary.nights !== 1 ? 's' : '' }}</div>
                   </div>
                   <div class="col-6 md:col-3 text-center">
-                    <div class="stat-value">{{ bookingSummary.guestCount }}</div>
-                    <div class="stat-label">Guest{{ bookingSummary.guestCount !== 1 ? 's' : '' }}</div>
+                    <div class="stat-value">{{ bookingSummary.guestCount }}/{{ bookingSummary.expectedGuests }}</div>
+                    <div class="stat-label">Guests</div>
                   </div>
                   <div class="col-6 md:col-3 text-center">
                     <div class="stat-value">{{ bookingSummary.roomCount }}</div>
@@ -547,6 +624,10 @@ onMounted(() => {
                     <div class="summary-item">
                       <span class="summary-label">Duration:</span>
                       <strong class="summary-value">{{ bookingSummary.nights }} night{{ bookingSummary.nights !== 1 ? 's' : '' }}</strong>
+                    </div>
+                    <div class="summary-item">
+                      <span class="summary-label">Expected Guests:</span>
+                      <strong class="summary-value">{{ bookingSummary.expectedGuests }}</strong>
                     </div>
                   </template>
                 </Card>
@@ -601,6 +682,10 @@ onMounted(() => {
                       <span class="summary-label">Phone:</span>
                       <strong class="summary-value">{{ corporateBookingForm.coordinator.phone || 'Not specified' }}</strong>
                     </div>
+                    <div class="summary-item">
+                      <span class="summary-label">NIN:</span>
+                      <strong class="summary-value">{{ corporateBookingForm.coordinator.nin || 'Not provided' }}</strong>
+                    </div>
                   </template>
                 </Card>
               </div>
@@ -616,7 +701,7 @@ onMounted(() => {
                   <template #content>
                     <div class="summary-item">
                       <span class="summary-label">Total Guests:</span>
-                      <strong class="summary-value">{{ bookingSummary.guestCount }}</strong>
+                      <strong class="summary-value">{{ bookingSummary.guestCount }}/{{ bookingSummary.expectedGuests }}</strong>
                     </div>
                     <div class="summary-item">
                       <span class="summary-label">Rooms Booked:</span>
@@ -691,6 +776,7 @@ onMounted(() => {
                         </div>
                         <div class="guest-email text-600">{{ guest.email }}</div>
                         <div class="guest-phone text-600">{{ guest.phone }}</div>
+                        <div class="guest-nin text-600">{{ guest.nin || 'NIN not provided' }}</div>
                       </div>
                       <div class="guest-room-info">
                         <div class="room-name font-semibold">
@@ -774,12 +860,6 @@ onMounted(() => {
 
 <style scoped>
 @import '@/styles/booking-management.css';
-
-/* Enhanced styling for better UX */
-/* .corporate-booking-card {
-  max-width: 1200px;
-  margin: 0 auto;
-} */
 
 .tab-content {
   min-height: 400px;
@@ -883,7 +963,7 @@ onMounted(() => {
   margin-bottom: 0.25rem;
 }
 
-.guest-email, .guest-phone {
+.guest-email, .guest-phone, .guest-nin {
   font-size: 0.875rem;
   margin-bottom: 0.25rem;
 }
@@ -902,18 +982,15 @@ onMounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-/* Progress bar styling */
 .p-progressbar {
   height: 8px;
 }
 
-/* Tab validation indicators */
 .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
   background: var(--primary-color);
   color: white;
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .tab-navigation .flex {
     flex-direction: column;

@@ -54,6 +54,86 @@ export function useCorporateBooking() {
     }
   };
 
+  const fetchBookingById = async (bookingId) => {
+    const userData = JSON.parse(localStorage.getItem('userData'));
+    const token = userData?.token;
+    loading.value = true;
+    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
+    try {
+      const response = await axiosInstance.get(`/admin/corporate-booking/${bookingId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const booking = response.data.data;
+      // Map response to corporateBookingForm
+      Object.assign(corporateBookingForm, {
+        is_new_company: !booking.company?.registration_number,
+        expected_guests: booking.expected_guests,
+        check_in_date: booking.check_in_date || null,
+        check_out_date: booking.check_out_date || null,
+        company: {
+          name: booking.company?.name || '',
+          address: booking.company?.address || '',
+          phone: booking.company?.phone || '',
+          email: booking.company?.email || ''
+        },
+        coordinator: {
+          full_name: booking.coordinator?.full_name || '',
+          email: booking.coordinator?.email || '',
+          phone: booking.coordinator?.phone || '',
+          nin: booking.coordinator?.nin || '',
+          id_card_file: booking.coordinator?.id_card_file || null
+        },
+        guests: booking.guests.map(guest => ({
+          id: guest.id,
+          full_name: guest.full_name || '',
+          email: guest.email || '',
+          phone: guest.phone || '',
+          room_id: guest.room?.id || null,
+          gender: guest.gender || 'Male',
+          is_checked_in: guest.is_checked_in || false,
+          is_checked_out: guest.is_checked_out || false
+        }))
+      });
+      selectedCompany.value = booking.company?.registration_number ? booking.company : null;
+      return booking;
+    } catch (error) {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch booking details', life: 3000 });
+      console.error('Error fetching booking by ID:', error);
+      return null;
+    } finally {
+      loading.value = false;
+      store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
+    }
+  };
+
+  const updateCorporateBooking = async (bookingId, formData) => {
+    const userData = JSON.parse(localStorage.getItem('userData'));
+    const token = userData?.token;
+    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
+    try {
+      const payload = { ...formData };
+      if (!payload.is_new_company && selectedCompany.value) {
+        payload.registration_number = selectedCompany.value.registration_number;
+        payload.company = selectedCompany.value;
+      }
+      await axiosInstance.put(`/admin/corporate-booking/${bookingId}`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Corporate booking updated successfully', life: 3000 });
+      resetCorporateBookingForm();
+      await fetchCorporateBookings();
+    } catch (error) {
+      toast.add({ severity: 'error', summary: 'Error', detail: error.response?.data?.message || 'Failed to update corporate booking', life: 3000 });
+      console.error('Error updating corporate booking:', error);
+      throw error;
+    } finally {
+      store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
+    }
+  };
+
   const fetchAvailableRooms = async () => {
     if (!corporateBookingForm.check_in_date || !corporateBookingForm.check_out_date) return;
     const userData = JSON.parse(localStorage.getItem('userData'));
@@ -268,7 +348,7 @@ export function useCorporateBooking() {
     const token = userData?.token;
   
     try {
-      store.commit(LOADING_SPINNER_SHOW_MUTATION, true); // Show global spinner
+      store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
       const response = await axiosInstance.get(
         `admin/corporate-booking/bill/${reservationCode}`,
         {
@@ -286,10 +366,9 @@ export function useCorporateBooking() {
       console.error('Error fetching corporate bill:', error);
       return null;
     } finally {
-      store.commit(LOADING_SPINNER_SHOW_MUTATION, false); // ✅ Always hide global spinner
+      store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
     }
   };
-  
 
   return {
     corporateBookings,
@@ -304,6 +383,8 @@ export function useCorporateBooking() {
     companies,
     filteredCompanies,
     fetchCorporateBookings,
+    fetchBookingById,
+    updateCorporateBooking,
     fetchAvailableRooms,
     fetchCompanies,
     searchCompanies,
@@ -324,5 +405,5 @@ export function useCorporateBooking() {
     confirmCheckOut,
     fetchCorporateBill,
     toast
-  };
+  }
 }
