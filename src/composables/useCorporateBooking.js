@@ -21,7 +21,8 @@ export function useCorporateBooking() {
     check_out_date: null,
     company: { name: '', address: '', phone: '', email: '' },
     coordinator: { full_name: '', email: '', phone: '', nin: '', id_card_file: null },
-    guests: []
+    guests: [],
+    expected_guests: 0 // Initialize expected_guests
   });
   const selectedCompany = ref(null);
   const availableRooms = ref([]);
@@ -64,10 +65,8 @@ export function useCorporateBooking() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const booking = response.data.data;
-      // Map response to corporateBookingForm
       Object.assign(corporateBookingForm, {
         is_new_company: !booking.company?.registration_number,
-        expected_guests: booking.expected_guests,
         check_in_date: booking.check_in_date || null,
         check_out_date: booking.check_out_date || null,
         company: {
@@ -92,7 +91,8 @@ export function useCorporateBooking() {
           gender: guest.gender || 'Male',
           is_checked_in: guest.is_checked_in || false,
           is_checked_out: guest.is_checked_out || false
-        }))
+        })),
+        expected_guests: booking.expected_guests || booking.guests.length // Use backend's expected_guests
       });
       selectedCompany.value = booking.company?.registration_number ? booking.company : null;
       return booking;
@@ -111,7 +111,7 @@ export function useCorporateBooking() {
     const token = userData?.token;
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
-      const payload = { ...formData };
+      const payload = { ...formData, expected_guests: formData.expected_guests };
       if (!payload.is_new_company && selectedCompany.value) {
         payload.registration_number = selectedCompany.value.registration_number;
         payload.company = selectedCompany.value;
@@ -172,6 +172,7 @@ export function useCorporateBooking() {
   };
 
   const onCompanySelect = (event) => {
+    selectedCompany.value = event.value;
     corporateBookingForm.company = { ...event.value };
   };
 
@@ -196,7 +197,8 @@ export function useCorporateBooking() {
       check_out_date: null,
       company: { name: '', address: '', phone: '', email: '' },
       coordinator: { full_name: '', email: '', phone: '', nin: '', id_card_file: null },
-      guests: []
+      guests: [],
+      expected_guests: 0
     });
     selectedCompany.value = null;
     availableRooms.value = [];
@@ -207,7 +209,7 @@ export function useCorporateBooking() {
     const token = userData?.token;
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
-      const formData = { ...corporateBookingForm };
+      const formData = { ...corporateBookingForm, expected_guests: corporateBookingForm.expected_guests };
       if (!formData.is_new_company && selectedCompany.value) {
         formData.company = selectedCompany.value;
       }
@@ -346,7 +348,6 @@ export function useCorporateBooking() {
   const fetchCorporateBill = async (reservationCode) => {
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
-  
     try {
       store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
       const response = await axiosInstance.get(
@@ -405,5 +406,5 @@ export function useCorporateBooking() {
     confirmCheckOut,
     fetchCorporateBill,
     toast
-  }
+  };
 }

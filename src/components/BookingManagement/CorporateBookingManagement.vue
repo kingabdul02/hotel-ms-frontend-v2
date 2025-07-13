@@ -12,6 +12,7 @@ import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
 import Calendar from 'primevue/calendar';
+import AutoComplete from 'primevue/autocomplete';
 import { useCorporateBooking } from '@/composables/useCorporateBooking';
 import { useRouter } from 'vue-router';
 import StatisticsCards from './StatisticsCards.vue';
@@ -59,7 +60,6 @@ interface CorporateBooking {
 const {
   corporateBookings,
   loading,
-  error,
   totalRecords,
   searchQuery,
   selectedStatus,
@@ -100,7 +100,6 @@ const isSearching = ref(false);
 const showBookingDialog = ref(false);
 const isEditMode = ref(false);
 const bookingIdToEdit = ref<string | null>(null);
-const expectedGuests = ref(0);
 
 // Constants
 const STATUS_OPTIONS = [
@@ -121,7 +120,7 @@ const guestGenderOptions = [
 const hasBookings = computed(() => corporateBookings.value.length > 0);
 const isEmptyState = computed(() => !loading.value && !hasBookings.value && !searchQuery.value);
 const isNoSearchResults = computed(() => !loading.value && !hasBookings.value && searchQuery.value);
-const canAddGuest = computed(() => corporateBookingForm.guests.length < expectedGuests.value);
+const canAddGuest = computed(() => corporateBookingForm.guests.length < corporateBookingForm.expected_guests);
 const minExpectedGuests = computed(() => {
   return corporateBookingForm.guests.filter(guest => guest.is_checked_in || guest.is_checked_out).length;
 });
@@ -189,7 +188,6 @@ const handleCheckOut = async (guest: Guest) => {
 
 const openCreateBookingDialog = () => {
   resetCorporateBookingForm();
-  expectedGuests.value = 0;
   isEditMode.value = false;
   bookingIdToEdit.value = null;
   showBookingDialog.value = true;
@@ -200,14 +198,12 @@ const openEditBookingDialog = async (booking: CorporateBooking) => {
   bookingIdToEdit.value = booking.id;
   isEditMode.value = true;
   await fetchBookingById(booking.id);
-  expectedGuests.value = corporateBookingForm.guests.length;
   showBookingDialog.value = true;
 };
 
 const closeBookingDialog = () => {
   showBookingDialog.value = false;
   resetCorporateBookingForm();
-  expectedGuests.value = 0;
   bookingIdToEdit.value = null;
   isEditMode.value = false;
 };
@@ -239,17 +235,17 @@ const handleRemoveGuest = (index: number) => {
 
 const handleExpectedGuestsChange = () => {
   const currentGuestCount = corporateBookingForm.guests.length;
-  if (expectedGuests.value < minExpectedGuests.value) {
+  if (corporateBookingForm.expected_guests < minExpectedGuests.value) {
     toast.add({
       severity: 'warn',
       summary: 'Invalid Input',
       detail: `Cannot set expected guests below ${minExpectedGuests.value} (number of checked-in or checked-out guests).`,
       life: 3000,
     });
-    expectedGuests.value = minExpectedGuests.value;
-  } else if (expectedGuests.value < currentGuestCount) {
+    corporateBookingForm.expected_guests = minExpectedGuests.value;
+  } else if (corporateBookingForm.expected_guests < currentGuestCount) {
     const guestsToRemove = corporateBookingForm.guests
-      .slice(expectedGuests.value)
+      .slice(corporateBookingForm.expected_guests)
       .filter(guest => !guest.is_checked_in && !guest.is_checked_out);
     if (guestsToRemove.length > 0) {
       confirm.require({
@@ -257,11 +253,11 @@ const handleExpectedGuestsChange = () => {
         header: 'Confirm Guest Removal',
         icon: 'pi pi-exclamation-triangle',
         accept: () => {
-          corporateBookingForm.guests = corporateBookingForm.guests.slice(0, expectedGuests.value);
+          corporateBookingForm.guests = corporateBookingForm.guests.slice(0, corporateBookingForm.expected_guests);
           toast.add({ severity: 'success', summary: 'Guests Removed', detail: 'Excess guests have been removed.', life: 3000 });
         },
         reject: () => {
-          expectedGuests.value = currentGuestCount;
+          corporateBookingForm.expected_guests = currentGuestCount;
         },
       });
     }
@@ -270,6 +266,10 @@ const handleExpectedGuestsChange = () => {
 
 const handleSubmit = async () => {
   try {
+    if (!isEditMode.value && !corporateBookingForm.is_new_company && !selectedCompany.value) {
+      toast.add({ severity: 'warn', summary: 'Invalid Input', detail: 'Please select a company.', life: 3000 });
+      return;
+    }
     if (isEditMode.value && bookingIdToEdit.value) {
       await updateCorporateBooking(bookingIdToEdit.value, corporateBookingForm);
     } else {
@@ -277,7 +277,6 @@ const handleSubmit = async () => {
     }
     showBookingDialog.value = false;
     resetCorporateBookingForm();
-    expectedGuests.value = 0;
     await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
   } catch (error) {
     // Error handled by composable's toast
@@ -371,16 +370,6 @@ watch(
       </template>
 
       <template #content>
-        <!-- Error State -->
-        <Message 
-          v-if="error" 
-          severity="error" 
-          :closable="false"
-          class="mb-4"
-        >
-          {{ error }}
-        </Message>
-
         <!-- Loading State -->
         <div v-if="loading" class="loading-container">
           <div class="loading-content">
@@ -479,14 +468,11 @@ watch(
             :loading="loading"
             aria-label="Corporate bookings table"
           >
-            <!-- Expansion Column -->
             <Column expander style="width: 5rem" header-style="width: 5rem">
               <template #header>
                 <span class="sr-only">Expand row</span>
               </template>
             </Column>
-
-            <!-- Booking ID Column -->
             <Column field="reservation_code" header="Booking ID" sortable>
               <template #body="slotProps">
                 <div class="cell-content">
@@ -494,8 +480,6 @@ watch(
                 </div>
               </template>
             </Column>
-
-            <!-- Coordinator Column -->
             <Column field="coordinator.full_name" header="Coordinator" sortable>
               <template #body="slotProps">
                 <div class="cell-content">
@@ -504,8 +488,6 @@ watch(
                 </div>
               </template>
             </Column>
-
-            <!-- Guests Column -->
             <Column header="Guests" sortable>
               <template #body="slotProps">
                 <div class="cell-content">
@@ -514,8 +496,6 @@ watch(
                 </div>
               </template>
             </Column>
-
-            <!-- Check-in Date Column -->
             <Column field="check_in_date" header="Check-In" sortable>
               <template #body="slotProps">
                 <div class="cell-content">
@@ -524,8 +504,6 @@ watch(
                 </div>
               </template>
             </Column>
-
-            <!-- Check-out Date Column -->
             <Column field="check_out_date" header="Check-Out" sortable>
               <template #body="slotProps">
                 <div class="cell-content">
@@ -534,8 +512,6 @@ watch(
                 </div>
               </template>
             </Column>
-
-            <!-- Status Column -->
             <Column header="Status" sortable>
               <template #body="slotProps">
                 <Tag
@@ -545,8 +521,6 @@ watch(
                 />
               </template>
             </Column>
-
-            <!-- Actions Column -->
             <Column header="Actions">
               <template #body="slotProps">
                 <div class="action-buttons">
@@ -568,21 +542,13 @@ watch(
                 </div>
               </template>
             </Column>
-
-            <!-- Expansion Template -->
             <template #expansion="slotProps">
               <div class="guests-expansion">
                 <div class="expansion-header">
                   <h4>{{ getGuestCountText(slotProps.data.guests.length) }}</h4>
                 </div>
-                
                 <div class="guests-grid">
-                  <div
-                    v-for="guest in slotProps.data.guests"
-                    :key="guest.id"
-                    class="guest-card"
-                  >
-                    <!-- Guest Header -->
+                  <div v-for="guest in slotProps.data.guests" :key="guest.id" class="guest-card">
                     <div class="guest-header">
                       <div class="guest-avatar">
                         <i class="pi pi-user" aria-hidden="true"></i>
@@ -592,14 +558,9 @@ watch(
                         <p class="guest-email">{{ guest.email || 'No email' }}</p>
                       </div>
                       <div class="guest-status">
-                        <Tag
-                          :value="getGuestStatus(guest)"
-                          :severity="getGuestStatusSeverity(guest)"
-                        />
+                        <Tag :value="getGuestStatus(guest)" :severity="getGuestStatusSeverity(guest)" />
                       </div>
                     </div>
-
-                    <!-- Room Info -->
                     <div class="room-info">
                       <div class="room-details">
                         <i class="pi pi-home text-blue-600" aria-hidden="true"></i>
@@ -607,8 +568,6 @@ watch(
                         <span class="room-price">{{ formatCurrency(guest.room.price) }}/night</span>
                       </div>
                     </div>
-
-                    <!-- Guest Actions -->
                     <div class="guest-actions">
                       <Button
                         v-if="!guest.is_checked_in && !guest.is_checked_out"
@@ -641,8 +600,6 @@ watch(
                         :aria-label="`View details for ${guest.full_name}`"
                       />
                     </div>
-
-                    <!-- Timestamps -->
                     <div v-if="guest.checked_in_at || guest.checked_out_at" class="guest-timestamps">
                       <div v-if="guest.checked_in_at" class="timestamp">
                         <i class="pi pi-calendar text-green-600" aria-hidden="true"></i>
@@ -673,7 +630,7 @@ watch(
       @hide="closeBookingDialog"
     >
       <div class="form-container">
-        <!-- Company Details -->
+        <!-- Company Selection -->
         <section class="form-section">
           <h3>Company Details</h3>
           <div class="form-grid">
@@ -740,16 +697,6 @@ watch(
                 :disabled="isEditMode"
               />
             </div>
-            <!-- <div class="form-group">
-              <label>ID Card</label>
-              <FileUpload
-                mode="basic"
-                accept="image/*"
-                :maxFileSize="1000000"
-                @select="event => corporateBookingForm.coordinator.id_card_file = event.files[0]"
-                :disabled="isEditMode"
-              />
-            </div> -->
           </div>
         </section>
 
@@ -778,7 +725,7 @@ watch(
             <div class="form-group">
               <label>Expected Guests</label>
               <InputText
-                v-model.number="expectedGuests"
+                v-model.number="corporateBookingForm.expected_guests"
                 type="number"
                 placeholder="Number of guests"
                 :min="minExpectedGuests"
@@ -890,7 +837,6 @@ watch(
       @hide="closeGuestDialog"
     >
       <div v-if="selectedGuest" class="guest-details-content">
-        <!-- Personal Information -->
         <section class="detail-section">
           <h3>Personal Information</h3>
           <div class="info-grid">
@@ -912,20 +858,12 @@ watch(
             </div>
           </div>
         </section>
-
-        <!-- Room Information -->
         <section v-if="selectedGuest.room" class="detail-section">
           <h3>Room Information</h3>
           <div class="room-details-card">
             <div class="room-header">
-              <div
-                v-if="selectedGuest.room.images?.data?.length"
-                class="room-image"
-              >
-                <img
-                  :src="selectedGuest.room.images.data[0].url"
-                  :alt="`${selectedGuest.room.name} room image`"
-                />
+              <div v-if="selectedGuest.room.images?.data?.length" class="room-image">
+                <img :src="selectedGuest.room.images.data[0].url" :alt="`${selectedGuest.room.name} room image`" />
               </div>
               <div class="room-info-details">
                 <h4>{{ selectedGuest.room.name }}</h4>
@@ -933,7 +871,6 @@ watch(
                 <p class="room-price">{{ formatCurrency(selectedGuest.room.price) }}/night</p>
               </div>
             </div>
-            
             <div class="room-specs">
               <div class="spec-item">
                 <span class="spec-label">Capacity</span>
@@ -954,8 +891,6 @@ watch(
             </div>
           </div>
         </section>
-
-        <!-- Status Information -->
         <section class="detail-section">
           <h3>Status Information</h3>
           <div class="status-grid">
@@ -974,7 +909,6 @@ watch(
               />
             </div>
           </div>
-          
           <div v-if="selectedGuest.checked_in_at || selectedGuest.checked_out_at" class="timestamps">
             <div v-if="selectedGuest.checked_in_at" class="timestamp-item">
               <span>Checked in at</span>
@@ -987,7 +921,6 @@ watch(
           </div>
         </section>
       </div>
-
       <template #footer>
         <Button
           label="Close"
@@ -1559,63 +1492,51 @@ watch(
   .corporate-booking-management {
     padding: 1rem;
   }
-
   .card-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
   }
-
   .table-controls {
     flex-direction: column;
     align-items: stretch;
   }
-
   .search-section,
   .filter-section {
     width: 100%;
   }
-
   .status-dropdown {
     width: 100%;
   }
-
   .guests-grid {
     grid-template-columns: 1fr;
   }
-
   .guest-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
   }
-
   .guest-actions {
     flex-direction: column;
     align-items: stretch;
   }
-
   .info-grid,
   .form-grid {
     grid-template-columns: 1fr;
   }
-
   .room-header {
     flex-direction: column;
     align-items: flex-start;
   }
-
   .room-specs {
     grid-template-columns: repeat(2, 1fr);
   }
-
   .status-item,
   .timestamp-item {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
-
   .action-buttons {
     flex-direction: column;
     gap: 0.5rem;
@@ -1626,7 +1547,6 @@ watch(
   .corporate-booking-management {
     padding: 0.75rem;
   }
-
   .room-specs {
     grid-template-columns: 1fr;
   }
@@ -1646,11 +1566,9 @@ watch(
 :deep(.p-button:focus) {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
-
 :deep(.p-dropdown:focus) {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
-
 :deep(.p-inputtext:focus) {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
