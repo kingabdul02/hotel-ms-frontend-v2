@@ -1,2094 +1,1575 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch, computed } from 'vue';
-import { useLayout } from '@/layout/composables/layout';
-import axiosInstance from '../service/AxiosInstance';
-import { useToast } from 'primevue/usetoast';
-import { useStore } from 'vuex';
-import { LOADING_SPINNER_SHOW_MUTATION } from '../store/storeconstants';
-import { formatDateTime } from '@/utils/dateTimeFormatter';
-import Dialog from 'primevue/dialog';
-import Button from 'primevue/button';
+import { ref, computed, watch, onMounted } from 'vue';
+import Card from 'primevue/card';
 import InputText from 'primevue/inputtext';
-import Tag from 'primevue/tag';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
-import Calendar from 'primevue/calendar';
+import Button from 'primevue/button';
+import Tag from 'primevue/tag';
 import Dropdown from 'primevue/dropdown';
+import ProgressSpinner from 'primevue/progressspinner';
+import ConfirmDialog from 'primevue/confirmdialog';
+import Toast from 'primevue/toast';
+import Dialog from 'primevue/dialog';
+import Calendar from 'primevue/calendar';
 import AutoComplete from 'primevue/autocomplete';
-import Textarea from 'primevue/textarea';
-import FileUpload from 'primevue/fileupload';
-import Card from 'primevue/card';
-import Divider from 'primevue/divider';
-import InputSwitch from 'primevue/inputswitch';
-import TabView from 'primevue/tabview';
-import TabPanel from 'primevue/tabpanel';
-import Chip from 'primevue/chip';
+import { useCorporateBooking } from '@/composables/useCorporateBooking';
+import { useRouter } from 'vue-router';
+import StatisticsCards from './StatisticsCards.vue';
 
-const store = useStore();
-const toast = useToast();
-const statisticsBookingResponse = ref({});
-const checkInsToday = ref(0);
-const checkOutsToday = ref(0);
-const availableRoomCount = ref(0);
-const recentBookingsCount = ref(0);
-const recentBookings = ref([]);
-const filteredBookings = ref([]);
-const searchQuery = ref('');
-const selectedBooking = ref(null);
-const showDialog = ref(false);
-const availableRooms = ref([]);
-const companies = ref([]);
-const filteredCompanies = ref([]);
+// Types
+interface Guest {
+  id: string;
+  full_name: string;
+  email?: string;
+  phone?: string;
+  gender?: string;
+  is_checked_in: boolean;
+  is_checked_out: boolean;
+  checked_in_at?: string;
+  checked_out_at?: string;
+  room: {
+    id: string;
+    name: string;
+    price: number;
+    no_of_guests?: number;
+    no_of_bedrooms?: number;
+    no_of_beds?: number;
+    no_of_baths?: number;
+    images?: {
+      data: Array<{ url: string }>;
+    };
+    roomType?: {
+      name: string;
+    };
+  };
+}
 
-// Reactive data
-const corporateBookings = ref([]);
-const loading = ref(false);
-const totalRecords = ref(0);
-const searchQuery2 = ref('');
-const selectedStatus = ref('');
-const expandedBookings = ref([]);
-const guestDetailsVisible = ref(false);
-const selectedGuest = ref(null);
-const selectedBooking2 = ref(null);
+interface CorporateBooking {
+  id: string;
+  coordinator?: {
+    full_name: string;
+  };
+  guests: Guest[];
+  check_in_date: string;
+  check_out_date: string;
+  reservation_code: string;
+}
 
-const lazyParams = ref({
-  first: 0,
-  rows: 10,
-  page: 1
-});
+// Composable
+const {
+  corporateBookings,
+  loading,
+  totalRecords,
+  searchQuery,
+  selectedStatus,
+  fetchCorporateBookings,
+  getBookingStatus,
+  getBookingStatusSeverity,
+  getGuestStatus,
+  getGuestStatusSeverity,
+  getCheckedInCount,
+  getCheckedOutCount,
+  getTotalGuestsCount,
+  confirmCheckIn,
+  confirmCheckOut,
+  corporateBookingForm,
+  selectedCompany,
+  availableRooms,
+  companies,
+  filteredCompanies,
+  fetchAvailableRooms,
+  fetchCompanies,
+  searchCompanies,
+  onCompanySelect,
+  addGuest,
+  removeGuest,
+  resetCorporateBookingForm,
+  submitCorporateBooking,
+  fetchBookingById,
+  updateCorporateBooking,
+  toast,
+  confirm,
+} = useCorporateBooking();
 
-// Status options for filtering
-const statusOptions = [
+// Reactive state
+const selectedGuest = ref<Guest | null>(null);
+const showGuestDialog = ref(false);
+const expandedRows = ref<CorporateBooking[]>([]);
+const isSearching = ref(false);
+const showBookingDialog = ref(false);
+const isEditMode = ref(false);
+const bookingIdToEdit = ref<string | null>(null);
+
+// Constants
+const STATUS_OPTIONS = [
   { label: 'All Status', value: '' },
   { label: 'Pending', value: 'pending' },
   { label: 'In Progress', value: 'in_progress' },
-  { label: 'Completed', value: 'completed' }
+  { label: 'Completed', value: 'completed' },
+] as const;
+
+const ITEMS_PER_PAGE = 10;
+
+const guestGenderOptions = [
+  { label: 'Male', value: 'Male' },
+  { label: 'Female', value: 'Female' },
 ];
-
-// Fetch corporate bookings
-const fetchCorporateBookings = async (params = lazyParams.value) => {
-  const userData = JSON.parse(localStorage.getItem('userData'));
-  const token = userData?.token;
-
-  loading.value = true;
-  store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-
-  try {
-    const response = await axiosInstance.get('/admin/corporate-booking', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      params: {
-        page: params.page,
-        per_page: params.rows,
-        search: searchQuery2.value,
-        status: selectedStatus.value
-      }
-    });
-
-    corporateBookings.value = response.data.data;
-    totalRecords.value = response.data.meta.total;
-    lazyParams.value = params;
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: 'Failed to fetch corporate bookings',
-      life: 3000
-    });
-    console.error('Error fetching corporate bookings:', error);
-  } finally {
-    loading.value = false;
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
-  }
-};
-
-// Handle pagination
-const onPage = (event) => {
-  const params = {
-    first: event.first,
-    rows: event.rows,
-    page: Math.floor(event.first / event.rows) + 1
-  };
-  fetchCorporateBookings(params);
-};
-
-// Toggle booking expansion
-const toggleBookingExpansion = (bookingId) => {
-  const index = expandedBookings.value.indexOf(bookingId);
-  if (index > -1) {
-    expandedBookings.value.splice(index, 1);
-  } else {
-    expandedBookings.value.push(bookingId);
-  }
-};
-
-// Show guest details dialog
-const showGuestDetails = (guest, booking) => {
-  selectedGuest.value = guest;
-  selectedBooking2.value = booking;
-  guestDetailsVisible.value = true;
-};
-
-// Get booking status
-const getBookingStatus = (booking) => {
-  const allCheckedOut = booking.guests.every(guest => guest.is_checked_out);
-  const someCheckedIn = booking.guests.some(guest => guest.is_checked_in);
-  
-  if (allCheckedOut) return 'Completed';
-  if (someCheckedIn) return 'In Progress';
-  return 'Pending';
-};
-
-// Get booking status severity
-const getBookingStatusSeverity = (booking) => {
-  const status = getBookingStatus(booking);
-  switch (status) {
-    case 'Completed': return 'success';
-    case 'In Progress': return 'info';
-    case 'Pending': return 'warning';
-    default: return 'info';
-  }
-};
-
-// Get guest status
-const getGuestStatus = (guest) => {
-  if (guest.is_checked_out) return 'Checked Out';
-  if (guest.is_checked_in) return 'Checked In';
-  return 'Pending';
-};
-
-// Get guest status severity
-const getGuestStatusSeverity = (guest) => {
-  if (guest.is_checked_out) return 'info';
-  if (guest.is_checked_in) return 'success';
-  return 'warning';
-};
-
-// Get statistics
-const getCheckedInCount = () => {
-  return corporateBookings.value.reduce((count, booking) => {
-    return count + booking.guests.filter(guest => guest.is_checked_in && !guest.is_checked_out).length;
-  }, 0);
-};
-
-const getCheckedOutCount = () => {
-  return corporateBookings.value.reduce((count, booking) => {
-    return count + booking.guests.filter(guest => guest.is_checked_out).length;
-  }, 0);
-};
-
-const getTotalGuestsCount = () => {
-  return corporateBookings.value.reduce((count, booking) => {
-    return count + booking.guests.length;
-  }, 0);
-};
-
-// Check-in guest
-const checkInGuest = async (guest) => {
-  const userData = JSON.parse(localStorage.getItem('userData'));
-  const token = userData?.token;
-
-  try {
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-    await axiosInstance.put(`/admin/corporate-booking/guest/${guest.id}/check-in`, {}, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      }
-    });
-
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: `${guest.full_name} has been checked in successfully`,
-      life: 3000
-    });
-
-    // Refresh the data
-    await fetchCorporateBookings();
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error.response?.data?.message || 'Failed to check in guest',
-      life: 3000
-    });
-    console.error('Error checking in guest:', error);
-  } finally {
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
-  }
-};
-
-// Check-out guest
-const checkOutGuest = async (guest) => {
-  const userData = JSON.parse(localStorage.getItem('userData'));
-  const token = userData?.token;
-
-  try {
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-    await axiosInstance.put(`/admin/corporate-booking/guest/${guest.id}/check-out`, {}, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      }
-    });
-
-    toast.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: `${guest.full_name} has been checked out successfully`,
-      life: 3000
-    });
-
-    // Refresh the data
-    await fetchCorporateBookings();
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error.response?.data?.message || 'Failed to check out guest',
-      life: 3000
-    });
-    console.error('Error checking out guest:', error);
-  } finally {
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
-  }
-};
-
-// Confirm check-in
-const confirmCheckIn = (guest) => {
-  confirm.require({
-    message: `Are you sure you want to check in ${guest.full_name}?`,
-    header: 'Check-In Confirmation',
-    icon: 'pi pi-info-circle',
-    rejectClass: 'p-button-text p-button-text',
-    acceptClass: 'p-button-success',
-    accept: () => {
-      checkInGuest(guest);
-    }
-  });
-};
-
-// Confirm check-out
-const confirmCheckOut = (guest) => {
-  confirm.require({
-    message: `Are you sure you want to check out ${guest.full_name}?`,
-    header: 'Check-Out Confirmation',
-    icon: 'pi pi-info-circle',
-    rejectClass: 'p-button-text p-button-text',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      checkOutGuest(guest);
-    }
-  });
-};
-
-// Corporate booking form data
-const corporateBookingForm = reactive({
-    is_new_company: true,
-    check_in_date: null,
-    check_out_date: null,
-    company: {
-        name: '',
-        address: '',
-        phone: '',
-        email: ''
-    },
-    coordinator: {
-        full_name: '',
-        email: '',
-        phone: '',
-        nin: '',
-        id_card_file: null
-    },
-    guests: []
-});
-
-const genderOptions = [
-    { label: 'Male', value: 'Male' },
-    { label: 'Female', value: 'Female' },
-    { label: 'Other', value: 'Other' }
-];
-
-const selectedCompany = ref(null);
 
 // Computed properties
-const isFormValid = computed(() => {
-    return corporateBookingForm.check_in_date &&
-           corporateBookingForm.check_out_date &&
-           corporateBookingForm.coordinator.full_name &&
-           corporateBookingForm.coordinator.email &&
-           corporateBookingForm.coordinator.phone &&
-           corporateBookingForm.guests.length > 0 &&
-           (corporateBookingForm.is_new_company ? 
-            corporateBookingForm.company.name : selectedCompany.value);
+const hasBookings = computed(() => corporateBookings.value.length > 0);
+const isEmptyState = computed(() => !loading.value && !hasBookings.value && !searchQuery.value);
+const isNoSearchResults = computed(() => !loading.value && !hasBookings.value && searchQuery.value);
+const canAddGuest = computed(() => corporateBookingForm.guests.length < corporateBookingForm.expected_guests);
+const minExpectedGuests = computed(() => {
+  return corporateBookingForm.guests.filter(guest => guest.is_checked_in || guest.is_checked_out).length;
 });
 
-const statisticsBooking = async () => {
-    const userData = JSON.parse(localStorage.getItem('userData'));
-    const token = userData?.token;
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-    try {
-        const response = await axiosInstance.get('/admin/statistics/booking', {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
-        statisticsBookingResponse.value = response.data;
-        checkInsToday.value = statisticsBookingResponse.value.checkInsToday;
-        checkOutsToday.value = statisticsBookingResponse.value.checkOutsToday;
-        availableRoomCount.value = statisticsBookingResponse.value.availableRoomCount;
-        recentBookingsCount.value = statisticsBookingResponse.value.recentBookings.length;
-        recentBookings.value = statisticsBookingResponse.value.recentBookings;
-        filteredBookings.value = recentBookings.value;
-    } catch (error) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch booking statistics', life: 3000 });
-        console.error('Error fetching booking statistics:', error);
-    } finally {
-        store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
-    }
+const statisticsData = computed(() => ({
+  recentBookingsCount: corporateBookings.value.length,
+  availableRoomCount: 0, // This should come from your API
+  checkInsToday: getCheckedInCount(),
+  checkOutsToday: getCheckedOutCount(),
+}));
+
+// Router
+const router = useRouter();
+
+// Methods
+const handleSearch = async () => {
+  if (isSearching.value) return;
+  isSearching.value = true;
+  try {
+    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
+  } finally {
+    isSearching.value = false;
+  }
 };
 
-const fetchAvailableRooms = async () => {
-    if (!corporateBookingForm.check_in_date || !corporateBookingForm.check_out_date) return;
-    
-    const userData = JSON.parse(localStorage.getItem('userData'));
-    const token = userData?.token;
-    
-    try {
-        const response = await axiosInstance.get('/rooms', {
-            params: {
-                check_in_date: corporateBookingForm.check_in_date,
-                check_out_date: corporateBookingForm.check_out_date
-            },
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
-        availableRooms.value = response.data?.data || [];
-
-        console.log('availableRooms.value', availableRooms.value)
-    } catch (error) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch available rooms', life: 3000 });
-    }
+const handleStatusChange = async () => {
+  await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
 };
 
-const fetchCompanies = async () => {
-    const userData = JSON.parse(localStorage.getItem('userData'));
-    const token = userData?.token;
-    
-    try {
-        const response = await axiosInstance.get('/admin/companies', {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
-        companies.value = response.data.companies || [];
-    } catch (error) {
-        console.error('Error fetching companies:', error);
-    }
+const showGuestDetails = (guest: Guest) => {
+  selectedGuest.value = guest;
+  showGuestDialog.value = true;
 };
 
-const searchCompanies = (event) => {
-    filteredCompanies.value = companies.value.filter(company =>
-        company.name.toLowerCase().includes(event.query.toLowerCase())
-    );
+const closeGuestDialog = () => {
+  showGuestDialog.value = false;
+  selectedGuest.value = null;
 };
 
-const onCompanySelect = (company) => {
-    corporateBookingForm.company = { ...company };
+const handleRowExpand = (event: { data: CorporateBooking }) => {
+  expandedRows.value = [event.data];
 };
 
-const addGuest = () => {
-    corporateBookingForm.guests.push({
-        full_name: '',
-        email: '',
-        phone: '',
-        room_id: null,
-        gender: 'Male'
+const handleRowCollapse = () => {
+  expandedRows.value = [];
+};
+
+const handleCheckIn = async (guest: Guest) => {
+  try {
+    await confirmCheckIn(guest);
+    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
+  } catch (error) {
+    console.error('Check-in failed:', error);
+  }
+};
+
+const handleCheckOut = async (guest: Guest) => {
+  try {
+    await confirmCheckOut(guest);
+    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
+  } catch (error) {
+    console.error('Check-out failed:', error);
+  }
+};
+
+const openCreateBookingDialog = () => {
+  resetCorporateBookingForm();
+  isEditMode.value = false;
+  bookingIdToEdit.value = null;
+  showBookingDialog.value = true;
+};
+
+const openEditBookingDialog = async (booking: CorporateBooking) => {
+  resetCorporateBookingForm();
+  bookingIdToEdit.value = booking.id;
+  isEditMode.value = true;
+  await fetchBookingById(booking.id);
+  showBookingDialog.value = true;
+};
+
+const closeBookingDialog = () => {
+  showBookingDialog.value = false;
+  resetCorporateBookingForm();
+  bookingIdToEdit.value = null;
+  isEditMode.value = false;
+};
+
+const handleAddGuest = () => {
+  if (!canAddGuest.value) {
+    toast.add({ severity: 'warn', summary: 'Limit Reached', detail: 'Cannot add more guests than expected.', life: 3000 });
+    return;
+  }
+  addGuest();
+};
+
+const handleRemoveGuest = (index: number) => {
+  const guest = corporateBookingForm.guests[index];
+  if (guest.is_checked_in || guest.is_checked_out) {
+    toast.add({ severity: 'warn', summary: 'Cannot Remove', detail: 'Checked-in or checked-out guests cannot be removed.', life: 3000 });
+    return;
+  }
+  confirm.require({
+    message: `Are you sure you want to remove ${guest.full_name || 'this guest'}?`,
+    header: 'Confirm Guest Removal',
+    icon: 'pi pi-exclamation-triangle',
+    accept: () => {
+      removeGuest(index);
+      toast.add({ severity: 'success', summary: 'Guest Removed', detail: 'Guest has been removed.', life: 3000 });
+    },
+  });
+};
+
+const handleExpectedGuestsChange = () => {
+  const currentGuestCount = corporateBookingForm.guests.length;
+  if (corporateBookingForm.expected_guests < minExpectedGuests.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Invalid Input',
+      detail: `Cannot set expected guests below ${minExpectedGuests.value} (number of checked-in or checked-out guests).`,
+      life: 3000,
     });
-};
-
-const removeGuest = (index) => {
-    corporateBookingForm.guests.splice(index, 1);
-};
-
-const resetCorporateBookingForm = () => {
-    Object.assign(corporateBookingForm, {
-        is_new_company: true,
-        check_in_date: null,
-        check_out_date: null,
-        company: {
-            name: '',
-            address: '',
-            phone: '',
-            email: ''
+    corporateBookingForm.expected_guests = minExpectedGuests.value;
+  } else if (corporateBookingForm.expected_guests < currentGuestCount) {
+    const guestsToRemove = corporateBookingForm.guests
+      .slice(corporateBookingForm.expected_guests)
+      .filter(guest => !guest.is_checked_in && !guest.is_checked_out);
+    if (guestsToRemove.length > 0) {
+      confirm.require({
+        message: `Reducing the number of guests will remove ${guestsToRemove.length} guest(s). Confirm?`,
+        header: 'Confirm Guest Removal',
+        icon: 'pi pi-exclamation-triangle',
+        accept: () => {
+          corporateBookingForm.guests = corporateBookingForm.guests.slice(0, corporateBookingForm.expected_guests);
+          toast.add({ severity: 'success', summary: 'Guests Removed', detail: 'Excess guests have been removed.', life: 3000 });
         },
-        coordinator: {
-            full_name: '',
-            email: '',
-            phone: '',
-            nin: '',
-            id_card_file: null
+        reject: () => {
+          corporateBookingForm.expected_guests = currentGuestCount;
         },
-        guests: []
-    });
-    selectedCompany.value = null;
-    availableRooms.value = [];
+      });
+    }
+  }
 };
 
-const submitCorporateBooking = async () => {
-    if (!isFormValid.value) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Please fill all required fields', life: 3000 });
-        return;
+const handleSubmit = async () => {
+  try {
+    if (!isEditMode.value && !corporateBookingForm.is_new_company && !selectedCompany.value) {
+      toast.add({ severity: 'warn', summary: 'Invalid Input', detail: 'Please select a company.', life: 3000 });
+      return;
     }
-
-    const userData = JSON.parse(localStorage.getItem('userData'));
-    const token = userData?.token;
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-
-    try {
-        const formData = { ...corporateBookingForm };
-        
-        // If using existing company, use selected company data
-        if (!formData.is_new_company && selectedCompany.value) {
-            formData.company = selectedCompany.value;
-        }
-
-        const response = await axiosInstance.post('/admin/corporate-booking', formData, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-        });
-
-        toast.add({ 
-            severity: 'success', 
-            summary: 'Success', 
-            detail: 'Corporate booking created successfully', 
-            life: 3000 
-        });
-        
-        resetCorporateBookingForm();
-        statisticsBooking(); // Refresh dashboard data
-        
-    } catch (error) {
-        toast.add({ 
-            severity: 'error', 
-            summary: 'Error', 
-            detail: error.response?.data?.message || 'Failed to create corporate booking', 
-            life: 3000 
-        });
-        console.error('Error creating corporate booking:', error);
-    } finally {
-        store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
-    }
-};
-
-const searchBookings = () => {
-    if (searchQuery.value) {
-        filteredBookings.value = recentBookings.value.filter(booking =>
-            booking.room.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-            booking.user.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-        );
+    if (isEditMode.value && bookingIdToEdit.value) {
+      await updateCorporateBooking(bookingIdToEdit.value, corporateBookingForm);
     } else {
-        filteredBookings.value = recentBookings.value;
+      await submitCorporateBooking();
     }
+    showBookingDialog.value = false;
+    resetCorporateBookingForm();
+    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
+  } catch (error) {
+    // Error handled by composable's toast
+  }
 };
 
-const showDetails = (booking) => {
-    selectedBooking.value = booking;
-    showDialog.value = true;
+const viewBill = (booking: CorporateBooking) => {
+  router.push({
+    name: 'CorporateBill',
+    params: { reservation_code: booking.reservation_code },
+  });
 };
 
-const handleCheckIn = async () => {
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-    const userData = JSON.parse(localStorage.getItem('userData'));
-    const token = userData?.token;
-    try {
-        await axiosInstance.get(`/admin/check-in-booking/${selectedBooking.value.booking_id}`, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
-        toast.add({ severity: 'success', summary: 'Success', detail: 'Booking checked in successfully', life: 3000 });
-        showDialog.value = false;
-        statisticsBooking();
-    } catch (error) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to check in booking', life: 3000 });
-        console.error('Error checking in booking:', error);
-    } finally {
-        store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
-    }
+// Utility functions
+const formatDate = (dateString?: string): string => {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 };
 
-const handleCheckOut = async () => {
-    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-    const userData = JSON.parse(localStorage.getItem('userData'));
-    const token = userData?.token;
-    try {
-        await axiosInstance.get(`/admin/check-out-booking/${selectedBooking.value.booking_id}`, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
-        toast.add({ severity: 'success', summary: 'Success', detail: 'Booking checked out successfully', life: 3000 });
-        showDialog.value = false;
-        statisticsBooking();
-    } catch (error) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to check out booking', life: 3000 });
-        console.error('Error checking out booking:', error);
-    } finally {
-        store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
-    }
+const formatDateTime = (dateString?: string): string => {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 };
 
-onMounted(() => {
-    statisticsBooking();
-    fetchCompanies();
-    fetchCorporateBookings();
+const formatCurrency = (amount?: number): string => {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    minimumFractionDigits: 0,
+  }).format(amount ?? 0);
+};
+
+const getGuestCountText = (count: number): string => {
+  return `${count} guest${count !== 1 ? 's' : ''}`;
+};
+
+// Lifecycle
+onMounted(async () => {
+  await fetchCorporateBookings();
+  await fetchCompanies();
 });
 
-watch(searchQuery, searchBookings);
-watch([() => corporateBookingForm.check_in_date, () => corporateBookingForm.check_out_date], fetchAvailableRooms);
-watch([searchQuery2, selectedStatus], () => {
-  // Reset to first page when searching/filtering
-  lazyParams.value.first = 0;
-  lazyParams.value.page = 1;
-  fetchCorporateBookings();
-}, { debounce: 500 });
-
-const { isDarkTheme } = useLayout();
-
-const formatCurrency = (value) => {
-    return value.toLocaleString('en-US', { style: 'currency', currency: 'NGN' });
-};
-
-const lineData = reactive({
-    labels: [],
-    datasets: []
-});
-
-const lineOptions = {
-    responsive: true,
-    plugins: {
-        legend: {
-            position: 'top',
-        },
-    },
-    interaction: {
-        mode: 'index',
-        intersect: false,
-    },
-    scales: {
-        x: {
-            display: true,
-            title: {
-                display: true,
-                text: 'Month'
-            }
-        },
-        y: {
-            display: true,
-            title: {
-                display: true,
-                text: 'Revenue'
-            }
-        }
-    }
-};
-
-const applyLightTheme = () => {
-    lineOptions.value = {
-        plugins: {
-            legend: {
-                labels: {
-                    color: '#495057'
-                }
-            }
-        },
-        scales: {
-            x: {
-                ticks: {
-                    color: '#495057'
-                },
-                grid: {
-                    color: '#ebedef'
-                }
-            },
-            y: {
-                ticks: {
-                    color: '#495057'
-                },
-                grid: {
-                    color: '#ebedef'
-                }
-            }
-        }
-    };
-};
-
-const applyDarkTheme = () => {
-    lineOptions.value = {
-        plugins: {
-            legend: {
-                labels: {
-                    color: '#ebedef'
-                }
-            }
-        },
-        scales: {
-            x: {
-                ticks: {
-                    color: '#ebedef'
-                },
-                grid: {
-                    color: 'rgba(160, 167, 181, .3)'
-                }
-            },
-            y: {
-                ticks: {
-                    color: '#ebedef'
-                },
-                grid: {
-                    color: 'rgba(160, 167, 181, .3)'
-                }
-            }
-        }
-    };
-};
-
+// Watchers
+watch(searchQuery, handleSearch, { debounce: 500 });
 watch(
-    isDarkTheme,
-    (val) => {
-        if (val) {
-            applyDarkTheme();
-        } else {
-            applyLightTheme();
-        }
-    },
-    { immediate: true }
+  () => [corporateBookingForm.check_in_date, corporateBookingForm.check_out_date],
+  () => {
+    if (corporateBookingForm.check_in_date && corporateBookingForm.check_out_date) {
+      fetchAvailableRooms();
+    }
+  }
 );
 </script>
 
 <template>
-    <div class="booking-management-container">
-        <!-- Main Tab Navigation -->
-        <TabView class="main-tabview">
-            <!-- Bookings Tab -->
-            <TabPanel>
-                <template #header>
-                    <div class="tab-header">
-                        <i class="pi pi-calendar-check text-primary"></i>
-                        <span class="ml-2 tab-title">Bookings</span>
-                    </div>
-                </template>
-                
-                <!-- Statistics Cards -->
-                <div class="grid mb-4">
-                    <div class="col-12 lg:col-6 xl:col-3">
-                        <Card class="statistics-card card-new-booking">
-                            <template #content>
-                                <div class="flex align-items-center gap-4">
-                                    <div class="icon-container bg-red-100">
-                                        <i class="pi pi-calendar-plus text-red-600 text-4xl"></i>
-                                    </div>
-                                    <div class="statistics-content">
-                                        <div class="statistics-number text-red-600">{{ recentBookingsCount }}</div>
-                                        <div class="statistics-label">New Bookings</div>
-                                    </div>
-                                </div>
-                            </template>
-                        </Card>
-                    </div>
-                    
-                    <div class="col-12 lg:col-6 xl:col-3">
-                        <Card class="statistics-card card-available-rooms">
-                            <template #content>
-                                <div class="flex align-items-center gap-4">
-                                    <div class="icon-container bg-blue-100">
-                                        <i class="pi pi-home text-blue-600 text-4xl"></i>
-                                    </div>
-                                    <div class="statistics-content">
-                                        <div class="statistics-number text-blue-600">{{ availableRoomCount }}</div>
-                                        <div class="statistics-label">Available Rooms</div>
-                                    </div>
-                                </div>
-                            </template>
-                        </Card>
-                    </div>
-                    
-                    <div class="col-12 lg:col-6 xl:col-3">
-                        <Card class="statistics-card card-check-ins">
-                            <template #content>
-                                <div class="flex align-items-center gap-4">
-                                    <div class="icon-container bg-green-100">
-                                        <i class="pi pi-sign-in text-green-600 text-4xl"></i>
-                                    </div>
-                                    <div class="statistics-content">
-                                        <div class="statistics-number text-green-600">{{ checkInsToday }}</div>
-                                        <div class="statistics-label">Check-ins Today</div>
-                                    </div>
-                                </div>
-                            </template>
-                        </Card>
-                    </div>
-                    
-                    <div class="col-12 lg:col-6 xl:col-3">
-                        <Card class="statistics-card card-check-outs">
-                            <template #content>
-                                <div class="flex align-items-center gap-4">
-                                    <div class="icon-container bg-purple-100">
-                                        <i class="pi pi-sign-out text-purple-600 text-4xl"></i>
-                                    </div>
-                                    <div class="statistics-content">
-                                        <div class="statistics-number text-purple-600">{{ checkOutsToday }}</div>
-                                        <div class="statistics-label">Check-outs Today</div>
-                                    </div>
-                                </div>
-                            </template>
-                        </Card>
-                    </div>
-                </div>
-                
-                <!-- Recent Bookings Table -->
-                <Card class="bookings-table-card">
-                    <template #title>
-                        <div class="flex align-items-center gap-2">
-                            <i class="pi pi-list text-primary"></i>
-                            <span>Recent Bookings</span>
-                        </div>
-                    </template>
-                    <template #content>
-                        <div class="table-header mb-4">
-                            <InputText 
-                                v-model="searchQuery" 
-                                placeholder="Search bookings..." 
-                                class="search-input"
-                            >
-                                <template #prepend>
-                                    <i class="pi pi-search"></i>
-                                </template>
-                            </InputText>
-                        </div>
-                        
-                        <DataTable 
-                            :value="filteredBookings" 
-                            :rows="10" 
-                            :paginator="true" 
-                            responsiveLayout="scroll"
-                            class="custom-datatable"
-                            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-                            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} bookings"
-                        >
-                            <Column field="room.name" header="Room" sortable>
-                                <template #body="slotProps">
-                                    <div class="flex align-items-center gap-2">
-                                        <i class="pi pi-home text-primary"></i>
-                                        <span class="font-semibold">{{ slotProps.data.room.name }}</span>
-                                    </div>
-                                </template>
-                            </Column>
-                            <Column field="user.name" header="Customer" sortable>
-                                <template #body="slotProps">
-                                    <div class="flex align-items-center gap-2">
-                                        <i class="pi pi-user text-primary"></i>
-                                        <span>{{ slotProps.data.user.name }}</span>
-                                    </div>
-                                </template>
-                            </Column>
-                            <Column field="check_in_date" header="Check-In" sortable>
-                                <template #body="slotProps">
-                                    <div class="flex align-items-center gap-2">
-                                        <i class="pi pi-calendar text-green-600"></i>
-                                        <span>{{ formatDateTime(slotProps.data.check_in_date) }}</span>
-                                    </div>
-                                </template>
-                            </Column>
-                            <Column field="check_out_date" header="Check-Out" sortable>
-                                <template #body="slotProps">
-                                    <div class="flex align-items-center gap-2">
-                                        <i class="pi pi-calendar text-red-600"></i>
-                                        <span>{{ formatDateTime(slotProps.data.check_out_date) }}</span>
-                                    </div>
-                                </template>
-                            </Column>
-                            <Column field="payment_status" header="Payment Status" sortable>
-                                <template #body="slotProps">
-                                    <Tag 
-                                        :value="slotProps.data.payment_status === 'paid' ? 'Paid' : 'Pending'"
-                                        :severity="slotProps.data.payment_status === 'paid' ? 'success' : 'warning'"
-                                        class="payment-status-tag"
-                                    />
-                                </template>
-                            </Column>
-                            <Column header="Actions">
-                                <template #body="slotProps">
-                                    <Button 
-                                        label="View Details" 
-                                        icon="pi pi-eye"
-                                        class="p-button-sm p-button-outlined"
-                                        @click="showDetails(slotProps.data)" 
-                                    />
-                                </template>
-                            </Column>
-                        </DataTable>
-                    </template>
-                </Card>
-            </TabPanel>
-            
-            <!-- Corporate Bookings Tab -->
-            <TabPanel>
-                <template #header>
-                    <div class="tab-header">
-                        <i class="pi pi-building text-primary"></i>
-                        <span class="ml-2 tab-title">Corporate Bookings</span>
-                    </div>
-                </template>
-                
-                <Card class="corporate-booking-card">
-                    <template #title>
-                        <div class="flex align-items-center gap-2">
-                            <i class="pi pi-building text-primary"></i>
-                            <span>Create Corporate Booking</span>
-                        </div>
-                    </template>
-                    <template #content>
-                        <TabView class="corporate-form-tabs">
-                            <!-- Booking Details -->
-                            <TabPanel header="Booking Details" leftIcon="pi pi-calendar">
-                                <div class="grid">
-                                    <div class="col-12 md:col-6">
-                                        <div class="field">
-                                            <label for="checkInDate" class="form-label">Check-In Date *</label>
-                                            <Calendar 
-                                                id="checkInDate"
-                                                v-model="corporateBookingForm.check_in_date" 
-                                                dateFormat="yy-mm-dd"
-                                                :minDate="new Date()"
-                                                class="w-full"
-                                                placeholder="Select check-in date"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div class="col-12 md:col-6">
-                                        <div class="field">
-                                            <label for="checkOutDate" class="form-label">Check-Out Date *</label>
-                                            <Calendar 
-                                                id="checkOutDate"
-                                                v-model="corporateBookingForm.check_out_date" 
-                                                dateFormat="yy-mm-dd"
-                                                :minDate="corporateBookingForm.check_in_date || new Date()"
-                                                class="w-full"
-                                                placeholder="Select check-out date"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </TabPanel>
+  <div class="corporate-booking-management">
+    <!-- Statistics Cards -->
+    <StatisticsCards v-bind="statisticsData" />
 
-                            <!-- Company Information -->
-                            <TabPanel header="Company Information" leftIcon="pi pi-building">
-                                <div class="field mb-4">
-                                    <div class="flex align-items-center gap-3">
-                                        <InputSwitch v-model="corporateBookingForm.is_new_company" />
-                                        <label class="form-label mb-0">
-                                            {{ corporateBookingForm.is_new_company ? 'New Company' : 'Existing Company' }}
-                                        </label>
-                                    </div>
-                                </div>
+    <!-- Main Content Card -->
+    <Card class="bookings-table-card">
+      <template #title>
+        <div class="card-header">
+          <div class="title-section">
+            <i class="pi pi-list text-primary" aria-hidden="true"></i>
+            <h2>Corporate Bookings</h2>
+          </div>
+          <div class="header-actions">
+            <span class="total-count" v-if="totalRecords > 0">
+              {{ totalRecords }} total bookings
+            </span>
+            <Button
+              label="Create Booking"
+              icon="pi pi-plus"
+              class="p-button-success p-button-sm"
+              @click="openCreateBookingDialog"
+              aria-label="Create new corporate booking"
+            />
+          </div>
+        </div>
+      </template>
 
-                                <div v-if="!corporateBookingForm.is_new_company" class="field mb-4">
-                                    <label for="companySearch" class="form-label">Select Company *</label>
-                                    <AutoComplete 
-                                        id="companySearch"
-                                        v-model="selectedCompany"
-                                        :suggestions="filteredCompanies"
-                                        @complete="searchCompanies"
-                                        @item-select="onCompanySelect"
-                                        optionLabel="name"
-                                        placeholder="Type to search companies..."
-                                        class="w-full"
-                                    />
-                                </div>
+      <template #content>
+        <!-- Loading State -->
+        <div v-if="loading" class="loading-container">
+          <div class="loading-content">
+            <ProgressSpinner style="width: 50px; height: 50px" />
+            <p class="loading-text">Loading bookings...</p>
+          </div>
+        </div>
 
-                                <div v-if="corporateBookingForm.is_new_company || selectedCompany">
-                                    <div class="grid">
-                                        <div class="col-12 md:col-6">
-                                            <div class="field">
-                                                <label for="companyName" class="form-label">Company Name *</label>
-                                                <InputText 
-                                                    id="companyName"
-                                                    v-model="corporateBookingForm.company.name" 
-                                                    class="w-full"
-                                                    placeholder="Enter company name"
-                                                    :disabled="!corporateBookingForm.is_new_company"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div class="col-12 md:col-6">
-                                            <div class="field">
-                                                <label for="companyEmail" class="form-label">Company Email *</label>
-                                                <InputText 
-                                                    id="companyEmail"
-                                                    v-model="corporateBookingForm.company.email" 
-                                                    type="email"
-                                                    class="w-full"
-                                                    placeholder="Enter company email"
-                                                    :disabled="!corporateBookingForm.is_new_company"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div class="col-12 md:col-6">
-                                            <div class="field">
-                                                <label for="companyPhone" class="form-label">Company Phone *</label>
-                                                <InputText 
-                                                    id="companyPhone"
-                                                    v-model="corporateBookingForm.company.phone" 
-                                                    class="w-full"
-                                                    placeholder="Enter company phone"
-                                                    :disabled="!corporateBookingForm.is_new_company"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div class="col-12 md:col-6">
-                                            <div class="field">
-                                                <label for="companyAddress" class="form-label">Company Address</label>
-                                                <Textarea 
-                                                    id="companyAddress"
-                                                    v-model="corporateBookingForm.company.address" 
-                                                    rows="3"
-                                                    class="w-full"
-                                                    placeholder="Enter company address"
-                                                    :disabled="!corporateBookingForm.is_new_company"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </TabPanel>
+        <!-- Empty State -->
+        <div v-else-if="isEmptyState" class="empty-state">
+          <div class="empty-content">
+            <i class="pi pi-calendar empty-icon" aria-hidden="true"></i>
+            <h3>No bookings yet</h3>
+            <p>Corporate bookings will appear here once they are created.</p>
+            <Button 
+              label="Create Booking" 
+              icon="pi pi-plus"
+              class="p-button-success"
+              @click="openCreateBookingDialog"
+              aria-label="Create new corporate booking"
+            />
+          </div>
+        </div>
 
-                            <!-- Coordinator -->
-                            <TabPanel header="Coordinator" leftIcon="pi pi-user">
-                                <div class="grid">
-                                    <div class="col-12 md:col-6">
-                                        <div class="field">
-                                            <label for="coordinatorName" class="form-label">Full Name *</label>
-                                            <InputText 
-                                                id="coordinatorName"
-                                                v-model="corporateBookingForm.coordinator.full_name" 
-                                                class="w-full"
-                                                placeholder="Enter coordinator full name"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div class="col-12 md:col-6">
-                                        <div class="field">
-                                            <label for="coordinatorEmail" class="form-label">Email *</label>
-                                            <InputText 
-                                                id="coordinatorEmail"
-                                                v-model="corporateBookingForm.coordinator.email" 
-                                                type="email"
-                                                class="w-full"
-                                                placeholder="Enter coordinator email"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div class="col-12 md:col-6">
-                                        <div class="field">
-                                            <label for="coordinatorPhone" class="form-label">Phone *</label>
-                                            <InputText 
-                                                id="coordinatorPhone"
-                                                v-model="corporateBookingForm.coordinator.phone" 
-                                                class="w-full"
-                                                placeholder="Enter coordinator phone"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div class="col-12 md:col-6">
-                                        <div class="field">
-                                            <label for="coordinatorNin" class="form-label">NIN</label>
-                                            <InputText 
-                                                id="coordinatorNin"
-                                                v-model="corporateBookingForm.coordinator.nin" 
-                                                class="w-full"
-                                                placeholder="Enter NIN (optional)"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </TabPanel>
+        <!-- No Search Results -->
+        <div v-else-if="isNoSearchResults" class="empty-state">
+          <div class="empty-content">
+            <i class="pi pi-search empty-icon" aria-hidden="true"></i>
+            <h3>No results found</h3>
+            <p>Try adjusting your search criteria or filters.</p>
+            <Button 
+              label="Clear Search" 
+              icon="pi pi-times"
+              class="p-button-text"
+              @click="searchQuery = ''"
+              aria-label="Clear search"
+            />
+          </div>
+        </div>
 
-                            <!-- Guests -->
-                            <TabPanel header="Guests" leftIcon="pi pi-users">
-                                <div class="mb-4 flex align-items-center justify-content-between">
-                                    <Button 
-                                        label="Add Guest" 
-                                        icon="pi pi-plus" 
-                                        class="p-button-success"
-                                        @click="addGuest"
-                                    />
-                                    <small v-if="availableRooms.length === 0" class="text-orange-500">
-                                        Please select check-in and check-out dates first
-                                    </small>
-                                </div>
-
-                                <div v-if="corporateBookingForm.guests.length > 0" class="guest-list">
-                                    <Card v-for="(guest, index) in corporateBookingForm.guests" :key="index" class="guest-card mb-3">
-                                        <template #header>
-                                            <div class="flex justify-content-between align-items-center p-3">
-                                                <div class="flex align-items-center gap-2">
-                                                    <i class="pi pi-user text-primary"></i>
-                                                    <span class="font-semibold">Guest {{ index + 1 }}</span>
-                                                </div>
-                                                <Button 
-                                                    icon="pi pi-trash" 
-                                                    class="p-button-rounded p-button-danger p-button-text" 
-                                                    @click="removeGuest(index)"
-                                                />
-                                            </div>
-                                        </template>
-                                        <template #content>
-                                            <div class="grid">
-                                                <div class="col-12 md:col-6">
-                                                    <div class="field">
-                                                        <label class="form-label">Full Name *</label>
-                                                        <InputText 
-                                                            v-model="guest.full_name" 
-                                                            class="w-full"
-                                                            placeholder="Enter guest full name"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div class="col-12 md:col-6">
-                                                    <div class="field">
-                                                        <label class="form-label">Email *</label>
-                                                        <InputText 
-                                                            v-model="guest.email" 
-                                                            type="email"
-                                                            class="w-full"
-                                                            placeholder="Enter guest email"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div class="col-12 md:col-4">
-                                                    <div class="field">
-                                                        <label class="form-label">Phone *</label>
-                                                        <InputText 
-                                                            v-model="guest.phone" 
-                                                            class="w-full"
-                                                            placeholder="Enter guest phone"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div class="col-12 md:col-4">
-                                                    <div class="field">
-                                                        <label class="form-label">Gender *</label>
-                                                        <Dropdown 
-                                                            v-model="guest.gender" 
-                                                            :options="genderOptions"
-                                                            optionLabel="label"
-                                                            optionValue="value"
-                                                            class="w-full"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div class="col-12 md:col-4">
-                                                    <div class="field">
-                                                        <label class="form-label">Room *</label>
-                                                        <Dropdown 
-                                                            v-model="guest.room_id" 
-                                                            :options="availableRooms"
-                                                            optionLabel="name"
-                                                            optionValue="id"
-                                                            class="w-full"
-                                                            placeholder="Select room"
-                                                        >
-                                                            <template #option="slotProps">
-                                                                <div class="flex justify-content-between align-items-center">
-                                                                    <span>{{ slotProps.option.name }}</span>
-                                                                    <Chip :label="formatCurrency(slotProps.option.price)" class="ml-2" />
-                                                                </div>
-                                                            </template>
-                                                        </Dropdown>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </Card>
-                                </div>
-
-                                <div v-else class="text-center py-5">
-                                    <i class="pi pi-users text-6xl text-400 mb-3"></i>
-                                    <p class="text-600 text-lg">No guests added yet</p>
-                                    <p class="text-500">Click "Add Guest" to start adding guests to this booking</p>
-                                </div>
-                            </TabPanel>
-
-                            <!-- Summary -->
-                            <TabPanel header="Summary" leftIcon="pi pi-check-circle">
-                                <div class="booking-summary">
-                                    <div class="grid">
-                                        <div class="col-12 md:col-6">
-                                            <Card class="summary-card">
-                                                <template #title>
-                                                    <div class="flex align-items-center gap-2">
-                                                        <i class="pi pi-calendar text-primary"></i>
-                                                        <span>Booking Period</span>
-                                                    </div>
-                                                </template>
-                                                <template #content>
-                                                    <div class="summary-item">
-                                                        <span class="summary-label">Check-in:</span>
-                                                        <strong class="summary-value">{{ corporateBookingForm.check_in_date || 'Not selected' }}</strong>
-                                                    </div>
-                                                    <div class="summary-item">
-                                                        <span class="summary-label">Check-out:</span>
-                                                        <strong class="summary-value">{{ corporateBookingForm.check_out_date || 'Not selected' }}</strong>
-                                                    </div>
-                                                </template>
-                                            </Card>
-                                        </div>
-                                        <div class="col-12 md:col-6">
-                                            <Card class="summary-card">
-                                                <template #title>
-                                                    <div class="flex align-items-center gap-2">
-                                                        <i class="pi pi-building text-primary"></i>
-                                                        <span>Company</span>
-                                                    </div>
-                                                </template>
-                                                <template #content>
-                                                    <div class="summary-item">
-                                                        <span class="summary-label">Name:</span>
-                                                        <strong class="summary-value">{{ corporateBookingForm.company.name || 'Not specified' }}</strong>
-                                                    </div>
-                                                    <div class="summary-item">
-                                                        <span class="summary-label">Type:</span>
-                                                        <Tag :value="corporateBookingForm.is_new_company ? 'New Company' : 'Existing Company'" 
-                                                             :severity="corporateBookingForm.is_new_company ? 'success' : 'info'" />
-                                                    </div>
-                                                </template>
-                                            </Card>
-                                        </div>
-                                        <div class="col-12 md:col-6">
-                                            <Card class="summary-card">
-                                                <template #title>
-                                                    <div class="flex align-items-center gap-2">
-                                                        <i class="pi pi-user text-primary"></i>
-                                                        <span>Coordinator</span>
-                                                    </div>
-                                                </template>
-                                                <template #content>
-                                                    <div class="summary-item">
-                                                        <span class="summary-label">Name:</span>
-                                                        <strong class="summary-value">{{ corporateBookingForm.coordinator.full_name || 'Not specified' }}</strong>
-                                                    </div>
-                                                    <div class="summary-item">
-                                                        <span class="summary-label">Email:</span>
-                                                        <strong class="summary-value">{{ corporateBookingForm.coordinator.email || 'Not specified' }}</strong>
-                                                    </div>
-                                                </template>
-                                            </Card>
-                                        </div>
-                                        <div class="col-12 md:col-6">
-                                            <Card class="summary-card">
-                                                <template #title>
-                                                    <div class="flex align-items-center gap-2">
-                                                        <i class="pi pi-users text-primary"></i>
-                                                        <span>Guests</span>
-                                                    </div>
-                                                </template>
-                                                <template #content>
-                                                    <div class="summary-item">
-                                                        <span class="summary-label">Total Guests:</span>
-                                                        <strong class="summary-value">{{ corporateBookingForm.guests.length }}</strong>
-                                                    </div>
-                                                    <div class="summary-item">
-                                                        <span class="summary-label">Rooms Required:</span>
-                                                        <strong class="summary-value">{{ corporateBookingForm.guests.filter(g => g.room_id).length }}</strong>
-                                                    </div>
-                                                </template>
-                                            </Card>
-                                        </div>
-                                    </div>
-
-                                    <Divider />
-
-                                    <div v-if="corporateBookingForm.guests.length > 0" class="guest-summary">
-                                        <h5 class="mb-3 flex align-items-center gap-2">
-                                            <i class="pi pi-list text-primary"></i>
-                                            <span>Guest List</span>
-                                        </h5>
-                                        <div class="guest-summary-list">
-                                            <div v-for="(guest, index) in corporateBookingForm.guests" :key="index" 
-                                                 class="guest-summary-item">
-                                                <div class="guest-info">
-                                                    <div class="guest-name">
-                                                        <i class="pi pi-user text-primary mr-2"></i>
-                                                        <span class="font-semibold">{{ guest.full_name || `Guest ${index + 1}` }}</span>
-                                                    </div>
-                                                    <div class="guest-email text-600">{{ guest.email }}</div>
-                                                </div>
-                                                <div class="guest-room-info">
-                                                    <div class="room-name font-semibold">
-                                                        {{ availableRooms.find(r => r.id === guest.room_id)?.name || 'No room selected' }}
-                                                    </div>
-                                                    <div class="guest-gender text-600">{{ guest.gender }}</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="form-actions mt-5">
-                                        <div class="flex justify-content-between">
-                                            <Button 
-                                                label="Reset Form" 
-                                                icon="pi pi-refresh" 
-                                                class="p-button-outlined p-button-secondary" 
-                                                @click="resetCorporateBookingForm" 
-                                            />
-                                            <Button 
-                                                label="Create Booking" 
-                                                icon="pi pi-check" 
-                                                class="p-button-success"
-                                                @click="submitCorporateBooking"
-                                                :disabled="!isFormValid"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </TabPanel>
-                        </TabView>
-                    </template>
-                </Card>
-            </TabPanel>
-
-            <!-- Corporate Booking Management -->
-            <TabPanel>
-                <template #header>
-                    <div class="tab-header">
-                        <i class="pi pi-building text-primary"></i>
-                        <span class="ml-2 tab-title">Manage Corporate Bookings</span>
-                    </div>
-                </template>
-                
-                <!-- Header Section -->
-                <div class="mb-4">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Corporate Booking Management</h2>
-                    <p class="text-gray-600">Manage corporate bookings and guest check-ins/check-outs</p>
-                </div>
-
-                <!-- Statistics Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div class="flex items-center">
-                            <div class="bg-blue-100 rounded-full p-3 mr-3">
-                                <i class="pi pi-calendar text-blue-600 text-xl"></i>
-                            </div>
-                            <div>
-                                <div class="text-2xl font-bold text-gray-800">{{ totalRecords }}</div>
-                                <div class="text-sm text-gray-600">Total Bookings</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <div class="flex items-center">
-                            <div class="bg-green-100 rounded-full p-3 mr-3">
-                                <i class="pi pi-check-circle text-green-600 text-xl"></i>
-                            </div>
-                            <div>
-                                <div class="text-2xl font-bold text-gray-800">{{ getCheckedInCount() }}</div>
-                                <div class="text-sm text-gray-600">Checked In</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div class="flex items-center">
-                            <div class="bg-red-100 rounded-full p-3 mr-3">
-                                <i class="pi pi-times-circle text-red-600 text-xl"></i>
-                            </div>
-                            <div>
-                                <div class="text-2xl font-bold text-gray-800">{{ getCheckedOutCount() }}</div>
-                                <div class="text-sm text-gray-600">Checked Out</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                        <div class="flex items-center">
-                            <div class="bg-purple-100 rounded-full p-3 mr-3">
-                                <i class="pi pi-users text-purple-600 text-xl"></i>
-                            </div>
-                            <div>
-                                <div class="text-2xl font-bold text-gray-800">{{ getTotalGuestsCount() }}</div>
-                                <div class="text-sm text-gray-600">Total Guests</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Search and Filter Section -->
-                <div class="bg-white rounded-lg shadow-sm border p-4 mb-6">
-                    <div class="flex flex-col md:flex-row gap-4 items-center">
-                        <div class="flex-1">
-                            <div class="relative">
-                                <i class="pi pi-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                                <InputText 
-                                    v-model="searchQuery2" 
-                                    placeholder="Search by coordinator or guest name..." 
-                                    class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <Dropdown 
-                                v-model="selectedStatus" 
-                                :options="statusOptions" 
-                                optionLabel="label" 
-                                optionValue="value"
-                                placeholder="All Status"
-                                class="w-40"
-                                showClear
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Bookings List -->
-                <div class="space-y-4">
-                    <div v-if="loading" class="text-center py-8">
-                        <ProgressSpinner />
-                        <p class="text-gray-600 mt-2">Loading bookings...</p>
-                    </div>
-                    
-                    <div v-else-if="corporateBookings.length === 0" class="text-center py-8">
-                        <i class="pi pi-inbox text-gray-400 text-4xl mb-4"></i>
-                        <p class="text-gray-600">No corporate bookings found</p>
-                    </div>
-                    
-                    <div v-else>
-                        <div 
-                            v-for="booking in corporateBookings" 
-                            :key="booking.id"
-                            class="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow duration-200"
-                        >
-                            <!-- Booking Header -->
-                            <div class="p-4 border-b border-gray-200">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center space-x-4">
-                                        <div class="bg-blue-100 rounded-full p-3">
-                                            <i class="pi pi-calendar text-blue-600 text-lg"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="text-lg font-semibold text-gray-800">Booking #{{ booking.id }}</h3>
-                                            <p class="text-sm text-gray-600">Coordinator: {{ booking.coordinator.full_name }}</p>
-                                        </div>
-                                    </div>
-                                    <div class="flex items-center space-x-4">
-                                        <div class="text-right">
-                                            <div class="text-sm font-medium text-gray-800">{{ formatDateTime(booking.check_in_date) }} - {{ formatDateTime(booking.check_out_date) }}</div>
-                                            <div class="text-sm text-gray-600">{{ booking.guests.length }} guest{{ booking.guests.length !== 1 ? 's' : '' }}</div>
-                                        </div>
-                                        <Tag 
-                                            :value="getBookingStatus(booking)" 
-                                            :severity="getBookingStatusSeverity(booking)"
-                                            class="text-sm"
-                                        />
-                                        <Button 
-                                            :icon="expandedBookings.includes(booking.id) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
-                                            class="p-button-text p-button-sm"
-                                            @click="toggleBookingExpansion(booking.id)"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Coordinator Information (Always Visible) -->
-                            <div class="p-4 bg-gray-50">
-                                <h4 class="font-semibold text-gray-800 mb-3">Coordinator Information</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div class="flex items-center space-x-2">
-                                        <i class="pi pi-envelope text-gray-500"></i>
-                                        <span class="text-sm text-gray-700">{{ booking.coordinator.email }}</span>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <i class="pi pi-phone text-gray-500"></i>
-                                        <span class="text-sm text-gray-700">{{ booking.coordinator.phone }}</span>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <i class="pi pi-id-card text-gray-500"></i>
-                                        <span class="text-sm text-gray-700">NIN: {{ booking.coordinator.nin }}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Expanded Guests Section -->
-                            <div v-if="expandedBookings.includes(booking.id)" class="border-t border-gray-200">
-                                <div class="p-4">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <h4 class="font-semibold text-gray-800 flex items-center">
-                                            <i class="pi pi-users text-gray-500 mr-2"></i>
-                                            Guests ({{ booking.guests.length }})
-                                        </h4>
-                                    </div>
-                                    
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                        <div 
-                                            v-for="guest in booking.guests" 
-                                            :key="guest.id"
-                                            class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
-                                        >
-                                            <!-- Guest Header -->
-                                            <div class="flex items-center justify-between mb-3">
-                                                <div class="flex items-center space-x-3">
-                                                    <div class="bg-gray-100 rounded-full p-2">
-                                                        <i 
-                                                            class="pi pi-user text-lg"
-                                                            :class="guest.gender === 'Male' ? 'text-blue-500' : guest.gender === 'Female' ? 'text-pink-500' : 'text-gray-500'"
-                                                        ></i>
-                                                    </div>
-                                                    <div>
-                                                        <h5 class="font-semibold text-gray-800">{{ guest.full_name }}</h5>
-                                                        <p class="text-sm text-gray-600">{{ guest.gender }}</p>
-                                                    </div>
-                                                </div>
-                                                <div class="flex items-center space-x-2">
-                                                    <Tag 
-                                                        :value="getGuestStatus(guest)" 
-                                                        :severity="getGuestStatusSeverity(guest)"
-                                                        class="text-xs"
-                                                    />
-                                                    <Button 
-                                                        icon="pi pi-eye"
-                                                        class="p-button-text p-button-sm"
-                                                        @click="showGuestDetails(guest, booking)"
-                                                        v-tooltip="'View Details'"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <!-- Guest Contact Info -->
-                                            <div class="space-y-2 mb-3">
-                                                <div class="flex items-center space-x-2 text-sm">
-                                                    <i class="pi pi-envelope text-gray-400 w-4"></i>
-                                                    <span class="text-gray-700">{{ guest.email }}</span>
-                                                </div>
-                                                <div class="flex items-center space-x-2 text-sm">
-                                                    <i class="pi pi-phone text-gray-400 w-4"></i>
-                                                    <span class="text-gray-700">{{ guest.phone }}</span>
-                                                </div>
-                                                <div class="flex items-center space-x-2 text-sm">
-                                                    <i class="pi pi-home text-gray-400 w-4"></i>
-                                                    <span class="text-gray-700">{{ guest.room?.name || 'No room assigned' }}</span>
-                                                    <Chip 
-                                                        v-if="guest.room"
-                                                        :label="formatCurrency(guest.room.price)"
-                                                        class="text-xs"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <!-- Check-in/Check-out Status -->
-                                            <div class="space-y-2 mb-4">
-                                                <div class="flex items-center justify-between text-sm">
-                                                    <span class="text-gray-600">Check-in Status:</span>
-                                                    <Tag 
-                                                        :value="guest.is_checked_in ? 'Checked In' : 'Not Checked In'"
-                                                        :severity="guest.is_checked_in ? 'success' : 'warning'"
-                                                        class="text-xs"
-                                                    />
-                                                </div>
-                                                <div class="flex items-center justify-between text-sm">
-                                                    <span class="text-gray-600">Check-out Status:</span>
-                                                    <Tag 
-                                                        :value="guest.is_checked_out ? 'Checked Out' : 'Still In Room'"
-                                                        :severity="guest.is_checked_out ? 'info' : 'success'"
-                                                        class="text-xs"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <!-- Action Buttons -->
-                                            <div class="flex space-x-2">
-                                                <Button
-                                                    v-if="!guest.is_checked_in && !guest.is_checked_out"
-                                                    label="Check In"
-                                                    icon="pi pi-sign-in"
-                                                    class="p-button-success p-button-sm flex-1"
-                                                    @click="confirmCheckIn(guest)"
-                                                />
-                                                <Button
-                                                    v-if="guest.is_checked_in && !guest.is_checked_out"
-                                                    label="Check Out"
-                                                    icon="pi pi-sign-out"
-                                                    class="p-button-danger p-button-sm flex-1"
-                                                    @click="confirmCheckOut(guest)"
-                                                />
-                                                <span v-if="guest.is_checked_out" class="text-sm text-gray-500 flex items-center justify-center flex-1">
-                                                    <i class="pi pi-check-circle mr-1"></i>
-                                                    Completed
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Pagination -->
-                <div v-if="corporateBookings.length > 0" class="mt-6">
-                    <Paginator
-                        :first="lazyParams.first"
-                        :rows="lazyParams.rows"
-                        :totalRecords="totalRecords"
-                        :rowsPerPageOptions="[5, 10, 20, 50]"
-                        @page="onPage"
-                        template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
-                        class="p-paginator-sm"
-                    />
-                </div>
-
-                <!-- Guest Details Dialog -->
-                <Dialog 
-                    v-model:visible="guestDetailsVisible" 
-                    :style="{ width: '600px' }" 
-                    header="Guest Details" 
-                    :modal="true"
-                    class="p-fluid"
-                >
-                    <div v-if="selectedGuest" class="space-y-6">
-                        <!-- Personal Information -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Personal Information</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                                    <p class="text-gray-900">{{ selectedGuest.full_name }}</p>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                                    <p class="text-gray-900">{{ selectedGuest.gender }}</p>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                    <p class="text-gray-900">{{ selectedGuest.email }}</p>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                                    <p class="text-gray-900">{{ selectedGuest.phone }}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Room Information -->
-                        <div v-if="selectedGuest.room">
-                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Room Information</h3>
-                            <div class="bg-gray-50 rounded-lg p-4">
-                                <div class="flex items-center space-x-4 mb-4">
-                                    <div v-if="selectedGuest.room.images?.data?.length > 0" class="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden">
-                                        <img 
-                                            :src="selectedGuest.room.images.data[0].url" 
-                                            :alt="selectedGuest.room.name"
-                                            class="w-full h-full object-cover"
-                                        />
-                                    </div>
-                                    <div class="flex-1">
-                                        <h4 class="font-semibold text-gray-800">{{ selectedGuest.room.name }}</h4>
-                                        <p class="text-sm text-gray-600">{{ selectedGuest.room.roomType?.name }}</p>
-                                        <p class="text-lg font-semibold text-blue-600">{{ formatCurrency(selectedGuest.room.price) }}/night</p>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <span class="text-gray-600">Capacity:</span>
-                                        <span class="font-medium ml-1">{{ selectedGuest.room.no_of_guests }} guests</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-gray-600">Bedrooms:</span>
-                                        <span class="font-medium ml-1">{{ selectedGuest.room.no_of_bedrooms }}</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-gray-600">Beds:</span>
-                                        <span class="font-medium ml-1">{{ selectedGuest.room.no_of_beds }}</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-gray-600">Bathrooms:</span>
-                                        <span class="font-medium ml-1">{{ selectedGuest.room.no_of_baths }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Status Information -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Status Information</h3>
-                            <div class="space-y-3">
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <span class="text-gray-700">Check-in Status:</span>
-                                    <Tag 
-                                        :value="selectedGuest.is_checked_in ? 'Checked In' : 'Not Checked In'"
-                                        :severity="selectedGuest.is_checked_in ? 'success' : 'warning'"
-                                    />
-                                </div>
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <span class="text-gray-700">Check-out Status:</span>
-                                    <Tag 
-                                        :value="selectedGuest.is_checked_out ? 'Checked Out' : 'Still In Room'"
-                                        :severity="selectedGuest.is_checked_out ? 'info' : 'success'"
-                                    />
-                                </div>
-                                <div v-if="selectedGuest.checked_in_at" class="p-3 bg-gray-50 rounded-lg">
-                                    <span class="text-gray-700">Checked in at:</span>
-                                    <span class="font-medium ml-2">{{ formatDateTime(selectedGuest.checked_in_at) }}</span>
-                                </div>
-                                <div v-if="selectedGuest.checked_out_at" class="p-3 bg-gray-50 rounded-lg">
-                                    <span class="text-gray-700">Checked out at:</span>
-                                    <span class="font-medium ml-2">{{ formatDateTime(selectedGuest.checked_out_at) }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </Dialog>
-            </TabPanel>
-        </TabView>
-
-        <!-- Individual Booking Details Dialog -->
-        <Dialog v-model:visible="showDialog" header="Booking Details" :modal="true" :style="{ width: '70vw' }">
-            <div v-if="selectedBooking" class="booking-details">
-                <Card class="booking-detail-card">
-                    <template #content>
-                        <div class="flex align-items-start flex-column lg:justify-content-between lg:flex-row">
-                            <div class="booking-customer-info">
-                                <div class="customer-name">
-                                    <i class="pi pi-user mr-2 text-primary"></i>
-                                    <span class="text-2xl font-bold">{{ selectedBooking.user.name }}</span>
-                                </div>
-                                <div class="booking-status-info">
-                                    <div class="status-item">
-                                        <i class="pi pi-sign-in mr-2"></i>
-                                        <Tag v-if="selectedBooking.is_checked_in === true" severity="success" value="Checked In" />
-                                        <Tag v-else-if="selectedBooking.is_checked_out === true" severity="contrast" value="Checked Out" />
-                                        <Tag v-else severity="warning" value="Not Checked In" />
-                                    </div>
-                                    <div class="status-item">
-                                        <i class="pi pi-money-bill mr-2"></i>
-                                        <span class="price-text">{{ formatCurrency(selectedBooking.room.price) }}</span>
-                                    </div>
-                                    <div class="status-item">
-                                        <i class="pi pi-clock mr-2"></i>
-                                        <span>{{ formatDateTime(selectedBooking.check_in_date) }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="booking-actions">
-                                <Button v-if="selectedBooking.is_checked_out === false && selectedBooking.is_checked_in === false" 
-                                       label="Check In Guest" 
-                                       icon="pi pi-sign-in" 
-                                       class="p-button-success mr-2"
-                                       @click="handleCheckIn" />
-                                <Button v-if="selectedBooking.is_checked_out === false && selectedBooking.is_checked_in === true" 
-                                       label="Check Out Guest" 
-                                       icon="pi pi-sign-out" 
-                                       class="p-button-danger"
-                                       @click="handleCheckOut" />
-                                <p v-if="selectedBooking.is_checked_out === true" class="text-600">Already Checked Out</p>
-                            </div>
-                        </div>
-                    </template>
-                </Card>
-                
-                <div class="booking-details-grid mt-4">
-                    <div class="grid">
-                        <div class="col-12 md:col-6">
-                            <div class="detail-item">
-                                <label class="detail-label">Room:</label>
-                                <span class="detail-value">{{ selectedBooking.room.name }}</span>
-                            </div>
-                        </div>
-                        <div class="col-12 md:col-6">
-                            <div class="detail-item">
-                                <label class="detail-label">Room Capacity:</label>
-                                <span class="detail-value">{{ selectedBooking.room.no_of_guests }} guests</span>
-                            </div>
-                        </div>
-                        <div class="col-12 md:col-6">
-                            <div class="detail-item">
-                                <label class="detail-label">Number of Nights:</label>
-                                <span class="detail-value">{{ selectedBooking.no_of_nights }}</span>
-                            </div>
-                        </div>
-                        <div class="col-12 md:col-6">
-                            <div class="detail-item">
-                                <label class="detail-label">Payment Status:</label>
-                                <Tag 
-                                    :value="selectedBooking.payment_status === 'paid' ? 'Paid' : 'Pending'"
-                                    :severity="selectedBooking.payment_status === 'paid' ? 'success' : 'warning'"
-                                />
-                            </div>
-                        </div>
-                        <div class="col-12 md:col-6">
-                            <div class="detail-item">
-                                <label class="detail-label">Check-In Time:</label>
-                                <span class="detail-value">{{ formatDateTime(selectedBooking.check_in_date) }}</span>
-                            </div>
-                        </div>
-                        <div class="col-12 md:col-6">
-                            <div class="detail-item">
-                                <label class="detail-label">Check-Out Time:</label>
-                                <span class="detail-value">{{ formatDateTime(selectedBooking.check_out_date) }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <!-- Data Table -->
+        <div v-else class="table-container">
+          <!-- Search and Filter Controls -->
+          <div class="table-controls">
+            <div class="search-section">
+              <div class="p-input-icon-left search-wrapper">
+                <i class="pi pi-search" :class="{ 'pi-spin': isSearching }" aria-hidden="true"></i>
+                <InputText
+                  v-model="searchQuery"
+                  placeholder="Search by coordinator or guest name..."
+                  class="search-input"
+                  :disabled="loading"
+                  aria-label="Search bookings"
+                />
+              </div>
             </div>
-            <template #footer>
-                <Button severity="secondary" label="Close" icon="pi pi-times" @click="showDialog = false" />
+            
+            <div class="filter-section">
+              <Dropdown
+                v-model="selectedStatus"
+                :options="STATUS_OPTIONS"
+                option-label="label"
+                option-value="value"
+                placeholder="Filter by status"
+                class="status-dropdown"
+                :disabled="loading"
+                @change="handleStatusChange"
+                aria-label="Filter by booking status"
+              >
+                <template #value="slotProps">
+                  <div class="dropdown-value">
+                    <i class="pi pi-filter" aria-hidden="true"></i>
+                    <span>{{ 
+                      slotProps.value 
+                        ? STATUS_OPTIONS.find(opt => opt.value === slotProps.value)?.label 
+                        : 'All Status' 
+                    }}</span>
+                  </div>
+                </template>
+              </Dropdown>
+            </div>
+          </div>
+
+          <!-- Data Table -->
+          <DataTable
+            :value="corporateBookings"
+            :rows="ITEMS_PER_PAGE"
+            :paginator="true"
+            responsive-layout="scroll"
+            class="custom-datatable"
+            paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
+            current-page-report-template="Showing {first} to {last} of {totalRecords} bookings"
+            :expanded-rows="expandedRows"
+            @row-expand="handleRowExpand"
+            @row-collapse="handleRowCollapse"
+            :loading="loading"
+            aria-label="Corporate bookings table"
+          >
+            <Column expander style="width: 5rem" header-style="width: 5rem">
+              <template #header>
+                <span class="sr-only">Expand row</span>
+              </template>
+            </Column>
+            <Column field="reservation_code" header="Booking ID" sortable>
+              <template #body="slotProps">
+                <div class="cell-content">
+                  <span class="booking-id">{{ slotProps.data.reservation_code }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column field="coordinator.full_name" header="Coordinator" sortable>
+              <template #body="slotProps">
+                <div class="cell-content">
+                  <i class="pi pi-user text-primary" aria-hidden="true"></i>
+                  <span>{{ slotProps.data.coordinator?.full_name || 'N/A' }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column header="Guests" sortable>
+              <template #body="slotProps">
+                <div class="cell-content">
+                  <i class="pi pi-users text-primary" aria-hidden="true"></i>
+                  <span>{{ getGuestCountText(slotProps.data.guests.length) }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column field="check_in_date" header="Check-In" sortable>
+              <template #body="slotProps">
+                <div class="cell-content">
+                  <i class="pi pi-calendar text-green-600" aria-hidden="true"></i>
+                  <span>{{ formatDate(slotProps.data.check_in_date) }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column field="check_out_date" header="Check-Out" sortable>
+              <template #body="slotProps">
+                <div class="cell-content">
+                  <i class="pi pi-calendar text-red-600" aria-hidden="true"></i>
+                  <span>{{ formatDate(slotProps.data.check_out_date) }}</span>
+                </div>
+              </template>
+            </Column>
+            <Column header="Status" sortable>
+              <template #body="slotProps">
+                <Tag
+                  :value="getBookingStatus(slotProps.data)"
+                  :severity="getBookingStatusSeverity(slotProps.data)"
+                  class="status-tag"
+                />
+              </template>
+            </Column>
+            <Column header="Actions">
+              <template #body="slotProps">
+                <div class="action-buttons">
+                  <Button
+                    label="Edit"
+                    icon="pi pi-pencil"
+                    class="p-button-sm p-button-outlined p-button-info mr-2"
+                    @click="openEditBookingDialog(slotProps.data)"
+                    :disabled="getBookingStatus(slotProps.data) === 'Completed'"
+                    :aria-label="`Edit booking ${slotProps.data.reservation_code}`"
+                  />
+                  <Button
+                    label="View Bill"
+                    icon="pi pi-file"
+                    class="p-button-sm p-button-outlined p-button-success"
+                    @click="viewBill(slotProps.data)"
+                    :aria-label="`View bill for booking ${slotProps.data.reservation_code}`"
+                  />
+                </div>
+              </template>
+            </Column>
+            <template #expansion="slotProps">
+              <div class="guests-expansion">
+                <div class="expansion-header">
+                  <h4>{{ getGuestCountText(slotProps.data.guests.length) }}</h4>
+                </div>
+                <div class="guests-grid">
+                  <div v-for="guest in slotProps.data.guests" :key="guest.id" class="guest-card">
+                    <div class="guest-header">
+                      <div class="guest-avatar">
+                        <i class="pi pi-user" aria-hidden="true"></i>
+                      </div>
+                      <div class="guest-info">
+                        <h5>{{ guest.full_name }}</h5>
+                        <p class="guest-email">{{ guest.email || 'No email' }}</p>
+                      </div>
+                      <div class="guest-status">
+                        <Tag :value="getGuestStatus(guest)" :severity="getGuestStatusSeverity(guest)" />
+                      </div>
+                    </div>
+                    <div class="room-info">
+                      <div class="room-details">
+                        <i class="pi pi-home text-blue-600" aria-hidden="true"></i>
+                        <span>Room {{ guest.room.name }}</span>
+                        <span class="room-price">{{ formatCurrency(guest.room.price) }}/night</span>
+                      </div>
+                    </div>
+                    <div class="guest-actions">
+                      <Button
+                        v-if="!guest.is_checked_in && !guest.is_checked_out"
+                        label="Check In"
+                        icon="pi pi-sign-in"
+                        size="small"
+                        severity="success"
+                        @click="handleCheckIn(guest)"
+                        :aria-label="`Check in ${guest.full_name}`"
+                      />
+                      <Button
+                        v-else-if="guest.is_checked_in && !guest.is_checked_out"
+                        label="Check Out"
+                        icon="pi pi-sign-out"
+                        size="small"
+                        severity="danger"
+                        @click="handleCheckOut(guest)"
+                        :aria-label="`Check out ${guest.full_name}`"
+                      />
+                      <div v-else class="completed-status">
+                        <i class="pi pi-check-circle" aria-hidden="true"></i>
+                        <span>Completed</span>
+                      </div>
+                      <Button
+                        icon="pi pi-eye"
+                        size="small"
+                        outlined
+                        severity="success"
+                        @click="showGuestDetails(guest)"
+                        :aria-label="`View details for ${guest.full_name}`"
+                      />
+                    </div>
+                    <div v-if="guest.checked_in_at || guest.checked_out_at" class="guest-timestamps">
+                      <div v-if="guest.checked_in_at" class="timestamp">
+                        <i class="pi pi-calendar text-green-600" aria-hidden="true"></i>
+                        <span>Checked in: {{ formatDateTime(guest.checked_in_at) }}</span>
+                      </div>
+                      <div v-if="guest.checked_out_at" class="timestamp">
+                        <i class="pi pi-calendar text-red-600" aria-hidden="true"></i>
+                        <span>Checked out: {{ formatDateTime(guest.checked_out_at) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </template>
-        </Dialog>
-    </div>
+          </DataTable>
+        </div>
+      </template>
+    </Card>
+
+    <!-- Booking Form Dialog -->
+    <Dialog
+      v-model:visible="showBookingDialog"
+      :style="{ width: '90vw', maxWidth: '1200px' }"
+      :header="isEditMode ? 'Edit Corporate Booking' : 'Create Corporate Booking'"
+      :modal="true"
+      class="booking-form-dialog"
+      :closable="true"
+      @hide="closeBookingDialog"
+    >
+      <div class="form-container">
+        <!-- Company Selection -->
+        <section class="form-section">
+          <h3>Company Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Company Name</label>
+              <InputText
+                v-model="corporateBookingForm.company.name"
+                placeholder="Company name"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <InputText
+                v-model="corporateBookingForm.company.email"
+                placeholder="Company email"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <InputText
+                v-model="corporateBookingForm.company.phone"
+                placeholder="Company phone"
+                :disabled="isEditMode"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- Coordinator Details -->
+        <section class="form-section">
+          <h3>Coordinator Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Full Name</label>
+              <InputText
+                v-model="corporateBookingForm.coordinator.full_name"
+                placeholder="Full name"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <InputText
+                v-model="corporateBookingForm.coordinator.email"
+                placeholder="Email"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <InputText
+                v-model="corporateBookingForm.coordinator.phone"
+                placeholder="Phone"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>NIN</label>
+              <InputText
+                v-model="corporateBookingForm.coordinator.nin"
+                placeholder="NIN"
+                :disabled="isEditMode"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- Booking Details -->
+        <section class="form-section">
+          <h3>Booking Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Check-in Date</label>
+              <Calendar
+                v-model="corporateBookingForm.check_in_date"
+                showIcon
+                dateFormat="yy-mm-dd"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Check-out Date</label>
+              <Calendar
+                v-model="corporateBookingForm.check_out_date"
+                showIcon
+                dateFormat="yy-mm-dd"
+                :disabled="isEditMode"
+              />
+            </div>
+            <div class="form-group">
+              <label>Expected Guests</label>
+              <InputText
+                v-model.number="corporateBookingForm.expected_guests"
+                type="number"
+                placeholder="Number of guests"
+                :min="minExpectedGuests"
+                @input="handleExpectedGuestsChange"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- Guest Details -->
+        <section class="form-section">
+          <h3>Guest Details</h3>
+          <div v-for="(guest, index) in corporateBookingForm.guests" :key="guest.id" class="guest-section">
+            <div class="guest-header">
+              <h4>Guest {{ index + 1 }}</h4>
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                :disabled="guest.is_checked_in || guest.is_checked_out"
+                @click="handleRemoveGuest(index)"
+              />
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Full Name</label>
+                <InputText
+                  v-model="guest.full_name"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Full name"
+                />
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <InputText
+                  v-model="guest.email"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Email"
+                />
+              </div>
+              <div class="form-group">
+                <label>Phone</label>
+                <InputText
+                  v-model="guest.phone"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Phone"
+                />
+              </div>
+              <div class="form-group">
+                <label>Gender</label>
+                <Dropdown
+                  v-model="guest.gender"
+                  :options="guestGenderOptions"
+                  option-label="label"
+                  option-value="value"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Select gender"
+                />
+              </div>
+              <div class="form-group">
+                <label>Room</label>
+                <Dropdown
+                  v-model="guest.room_id"
+                  :options="availableRooms"
+                  option-label="name"
+                  option-value="id"
+                  :disabled="guest.is_checked_in || guest.is_checked_out"
+                  placeholder="Select room"
+                />
+              </div>
+            </div>
+          </div>
+          <Button
+            label="Add Guest"
+            icon="pi pi-plus"
+            class="p-button-outlined p-button-success"
+            :disabled="!canAddGuest"
+            @click="handleAddGuest"
+          />
+        </section>
+      </div>
+
+      <template #footer>
+        <Button
+          label="Cancel"
+          icon="pi pi-times"
+          text
+          @click="closeBookingDialog"
+          aria-label="Cancel booking"
+        />
+        <Button
+          :label="isEditMode ? 'Update Booking' : 'Create Booking'"
+          icon="pi pi-save"
+          class="p-button-success"
+          @click="handleSubmit"
+          aria-label="Save booking"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Guest Details Dialog -->
+    <Dialog
+      v-model:visible="showGuestDialog"
+      :style="{ width: '90vw', maxWidth: '600px' }"
+      header="Guest Details"
+      :modal="true"
+      class="guest-details-dialog"
+      :closable="true"
+      @hide="closeGuestDialog"
+    >
+      <div v-if="selectedGuest" class="guest-details-content">
+        <section class="detail-section">
+          <h3>Personal Information</h3>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Full Name</label>
+              <span>{{ selectedGuest.full_name || 'N/A' }}</span>
+            </div>
+            <div class="info-item">
+              <label>Gender</label>
+              <span>{{ selectedGuest.gender || 'N/A' }}</span>
+            </div>
+            <div class="info-item">
+              <label>Email</label>
+              <span>{{ selectedGuest.email || 'N/A' }}</span>
+            </div>
+            <div class="info-item">
+              <label>Phone</label>
+              <span>{{ selectedGuest.phone || 'N/A' }}</span>
+            </div>
+          </div>
+        </section>
+        <section v-if="selectedGuest.room" class="detail-section">
+          <h3>Room Information</h3>
+          <div class="room-details-card">
+            <div class="room-header">
+              <div v-if="selectedGuest.room.images?.data?.length" class="room-image">
+                <img :src="selectedGuest.room.images.data[0].url" :alt="`${selectedGuest.room.name} room image`" />
+              </div>
+              <div class="room-info-details">
+                <h4>{{ selectedGuest.room.name }}</h4>
+                <p class="room-type">{{ selectedGuest.room.roomType?.name || 'Standard Room' }}</p>
+                <p class="room-price">{{ formatCurrency(selectedGuest.room.price) }}/night</p>
+              </div>
+            </div>
+            <div class="room-specs">
+              <div class="spec-item">
+                <span class="spec-label">Capacity</span>
+                <span class="spec-value">{{ selectedGuest.room.no_of_guests || 0 }} guests</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Bedrooms</span>
+                <span class="spec-value">{{ selectedGuest.room.no_of_bedrooms || 0 }}</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Beds</span>
+                <span class="spec-value">{{ selectedGuest.room.no_of_beds || 0 }}</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Bathrooms</span>
+                <span class="spec-value">{{ selectedGuest.room.no_of_baths || 0 }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="detail-section">
+          <h3>Status Information</h3>
+          <div class="status-grid">
+            <div class="status-item">
+              <span>Check-in Status</span>
+              <Tag
+                :value="selectedGuest.is_checked_in ? 'Checked In' : 'Not Checked In'"
+                :severity="selectedGuest.is_checked_in ? 'success' : 'warning'"
+              />
+            </div>
+            <div class="status-item">
+              <span>Check-out Status</span>
+              <Tag
+                :value="selectedGuest.is_checked_out ? 'Checked Out' : 'Still In Room'"
+                :severity="selectedGuest.is_checked_out ? 'info' : 'success'"
+              />
+            </div>
+          </div>
+          <div v-if="selectedGuest.checked_in_at || selectedGuest.checked_out_at" class="timestamps">
+            <div v-if="selectedGuest.checked_in_at" class="timestamp-item">
+              <span>Checked in at</span>
+              <span class="timestamp-value">{{ formatDateTime(selectedGuest.checked_in_at) }}</span>
+            </div>
+            <div v-if="selectedGuest.checked_out_at" class="timestamp-item">
+              <span>Checked out at</span>
+              <span class="timestamp-value">{{ formatDateTime(selectedGuest.checked_out_at) }}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+      <template #footer>
+        <Button
+          label="Close"
+          icon="pi pi-times"
+          text
+          @click="closeGuestDialog"
+          aria-label="Close guest details dialog"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Global Components -->
+    <ConfirmDialog />
+    <Toast />
+  </div>
 </template>
 
 <style scoped>
-.booking-management-container {
-    padding: 1rem;
+/* Main Layout */
+.corporate-booking-management {
+  padding: 1.5rem;
+  max-width: 100%;
+  margin: 0 auto;
 }
 
-/* Main Tab Navigation */
-.main-tabview {
-    background: var(--surface-card);
-    border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-}
-
-.main-tabview .p-tabview-nav {
-    background: var(--surface-card);
-    border-bottom: 2px solid var(--surface-border);
-    border-radius: 12px 12px 0 0;
-}
-
-.main-tabview .p-tabview-header {
-    background: transparent;
-}
-
-.main-tabview .p-tabview-header.p-highlight {
-    background: var(--primary-50);
-    border-color: var(--primary-color);
-}
-
-.tab-header {
-    display: flex;
-    align-items: center;
-    padding: 0.5rem 1rem;
-}
-
-.tab-title {
-    font-weight: 600;
-    font-size: 1.1rem;
-}
-
-/* Statistics Cards */
-.statistics-card {
-    border-radius: 16px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    transition: all 0.3s ease;
-    border: 1px solid var(--surface-border);
-}
-
-.statistics-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-}
-
-.icon-container {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.statistics-content {
-    flex: 1;
-}
-
-.statistics-number {
-    font-size: 2.5rem;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 0.5rem;
-}
-
-.statistics-label {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-color-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-/* Bookings Table */
+/* Card Styling */
 .bookings-table-card {
-    border-radius: 16px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.table-header {
-    padding: 1rem 0;
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.title-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.title-section h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.total-count {
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Loading State */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.loading-text {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Empty States */
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  padding: 2rem;
+}
+
+.empty-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  color: #cbd5e1;
+  margin-bottom: 1rem;
+}
+
+.empty-content h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.empty-content p {
+  margin: 0 0 1.5rem 0;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+/* Table Controls */
+.table-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.search-section {
+  flex: 1;
+  min-width: 250px;
+}
+
+.search-wrapper {
+  width: 100%;
+  max-width: 400px;
 }
 
 .search-input {
-    max-width: 300px;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
+.search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-section {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.status-dropdown {
+  min-width: 180px;
+}
+
+.dropdown-value {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Data Table Styling */
 .custom-datatable {
-    border-radius: 12px;
-    overflow: hidden;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
 }
 
-.payment-status-tag {
-    min-width: 80px;
-    text-align: center;
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+  background: #f8fafc;
+  color: #374151;
+  font-weight: 600;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem 0.75rem;
 }
 
-/* Corporate Booking Form */
-.corporate-booking-card {
-    border-radius: 16px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+:deep(.p-datatable .p-datatable-tbody > tr) {
+  transition: background-color 0.2s;
+  border-bottom: 1px solid #f1f5f9;
 }
 
-.corporate-form-tabs .p-tabview-panels {
-    padding: 2rem;
+:deep(.p-datatable .p-datatable-tbody > tr:hover) {
+  background: #f8fafc;
 }
 
-.form-label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-    color: var(--text-color);
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
+  padding: 1rem 0.75rem;
+  border: none;
 }
 
-.field {
-    margin-bottom: 1.5rem;
+.cell-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-/* Guest Cards */
+.booking-id {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-weight: 600;
+}
+
+.status-tag {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Guest Expansion */
+.guests-expansion {
+  padding: 1.5rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin: 0.5rem;
+}
+
+.expansion-header h4 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.guests-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+}
+
 .guest-card {
-    border: 2px solid var(--surface-border);
-    border-radius: 12px;
-    transition: all 0.3s ease;
+  background: white;
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s;
 }
 
 .guest-card:hover {
-    border-color: var(--primary-color);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Summary Cards */
-.summary-card {
-    border-radius: 12px;
-    border: 1px solid var(--surface-border);
-    height: 100%;
+.guest-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
-.summary-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.summary-label {
-    color: var(--text-color-secondary);
-    font-weight: 500;
-}
-
-.summary-value {
-    color: var(--text-color);
-}
-
-.guest-summary-list {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.guest-summary-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    margin-bottom: 0.5rem;
-    background: var(--surface-100);
-    border-radius: 8px;
-    border: 1px solid var(--surface-border);
-    transition: all 0.3s ease;
-}
-
-.guest-summary-item:hover {
-    background: var(--surface-200);
-    transform: translateX(4px);
+.guest-avatar {
+  width: 40px;
+  height: 40px;
+  background: #e2e8f0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
 }
 
 .guest-info {
-    flex: 1;
+  flex: 1;
 }
 
-.guest-name {
-    display: flex;
-    align-items: center;
-    margin-bottom: 0.25rem;
+.guest-info h5 {
+  margin: 0 0 0.25rem 0;
+  font-weight: 600;
+  color: #1e293b;
 }
 
-.guest-room-info {
-    text-align: right;
+.guest-email {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #64748b;
 }
 
-.room-name {
-    margin-bottom: 0.25rem;
+.room-info {
+  margin-bottom: 1rem;
 }
 
-/* Booking Details Dialog */
-.booking-detail-card {
-    border-radius: 12px;
-    border: 2px solid var(--surface-border);
+.room-details {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
 }
 
-.booking-customer-info {
-    flex: 1;
+.room-price {
+  font-weight: 600;
+  color: #3b82f6;
+  margin-left: auto;
 }
 
-.customer-name {
-    display: flex;
-    align-items: center;
-    margin-bottom: 1rem;
+.guest-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
-.booking-status-info {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
+.completed-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #059669;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.guest-timestamps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.timestamp {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Booking Form Dialog */
+.booking-form-dialog {
+  border-radius: 12px;
+}
+
+.form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 1rem;
+}
+
+.form-section {
+  padding: 1rem;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.form-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.guest-section {
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.guest-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.guest-header h4 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+/* Guest Details Dialog */
+.guest-details-dialog {
+  border-radius: 12px;
+}
+
+.guest-details-content {
+  padding: 0.5rem 0;
+}
+
+.detail-section {
+  margin-bottom: 2rem;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.info-item label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.info-item span {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.room-details-card {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 1.25rem;
+  border: 1px solid #e2e8f0;
+}
+
+.room-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.room-image {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+
+.room-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.room-info-details h4 {
+  margin: 0 0 0.25rem 0;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.room-type {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.room-price {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.room-specs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.spec-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.spec-label {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.spec-value {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .status-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
-.price-text {
-    font-weight: 600;
-    color: var(--primary-color);
+.timestamps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.booking-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+.timestamp-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
-.detail-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+.timestamp-value {
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 0.875rem;
 }
 
-.detail-label {
-    font-weight: 600;
-    color: var(--text-color-secondary);
-    font-size: 0.9rem;
-}
-
-.detail-value {
-    font-weight: 500;
-    color: var(--text-color);
-}
-
-/* Form Actions */
-.form-actions {
-    padding: 1.5rem;
-    background: var(--surface-50);
-    border-radius: 12px;
-    border: 1px solid var(--surface-border);
+/* Screen Reader Only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
-    .booking-management-container {
-        padding: 0.5rem;
-    }
-    
-    .statistics-number {
-        font-size: 2rem;
-    }
-    
-    .tab-title {
-        font-size: 1rem;
-    }
-    
-    .corporate-form-tabs .p-tabview-panels {
-        padding: 1rem;
-    }
-    
-    .guest-summary-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-    
-    .guest-room-info {
-        text-align: left;
-    }
-    
-    .booking-status-info {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .booking-actions {
-        margin-top: 1rem;
-        flex-direction: row;
-        gap: 0.5rem;
-    }
+  .corporate-booking-management {
+    padding: 1rem;
+  }
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .table-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .search-section,
+  .filter-section {
+    width: 100%;
+  }
+  .status-dropdown {
+    width: 100%;
+  }
+  .guests-grid {
+    grid-template-columns: 1fr;
+  }
+  .guest-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .guest-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .info-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .room-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .room-specs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .status-item,
+  .timestamp-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .action-buttons {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
 }
 
-/* Animations */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+@media (max-width: 480px) {
+  .corporate-booking-management {
+    padding: 0.75rem;
+  }
+  .room-specs {
+    grid-template-columns: 1fr;
+  }
 }
 
-.statistics-card,
-.bookings-table-card,
-.corporate-booking-card {
-    animation: fadeIn 0.6s ease-out;
+/* Animation for loading spinner */
+.pi-spin {
+  animation: spin 1s linear infinite;
 }
 
-/* Scrollbar Styling */
-.guest-summary-list::-webkit-scrollbar {
-    width: 6px;
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-.guest-summary-list::-webkit-scrollbar-track {
-    background: var(--surface-ground);
-    border-radius: 3px;
+/* Focus styles for accessibility */
+:deep(.p-button:focus) {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
-
-.guest-summary-list::-webkit-scrollbar-thumb {
-    background: var(--surface-border);
-    border-radius: 3px;
+:deep(.p-dropdown:focus) {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
-
-.guest-summary-list::-webkit-scrollbar-thumb:hover {
-    background: var(--surface-300);
+:deep(.p-inputtext:focus) {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
 </style>

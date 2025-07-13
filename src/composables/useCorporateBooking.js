@@ -111,7 +111,7 @@ export function useCorporateBooking() {
     const token = userData?.token;
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
-      const payload = { ...formData, expected_guests: formData.expected_guests };
+      const payload = { ...formData };
       if (!payload.is_new_company && selectedCompany.value) {
         payload.registration_number = selectedCompany.value.registration_number;
         payload.company = selectedCompany.value;
@@ -178,6 +178,7 @@ export function useCorporateBooking() {
 
   const addGuest = () => {
     corporateBookingForm.guests.push({
+      id: `guest-${Date.now()}-${Math.random()}`, // Generate unique ID
       full_name: '',
       email: '',
       phone: '',
@@ -209,7 +210,7 @@ export function useCorporateBooking() {
     const token = userData?.token;
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
-      const formData = { ...corporateBookingForm, expected_guests: corporateBookingForm.expected_guests };
+      const formData = { ...corporateBookingForm };
       if (!formData.is_new_company && selectedCompany.value) {
         formData.company = selectedCompany.value;
       }
