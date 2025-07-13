@@ -405,6 +405,7 @@ export function useCorporateBooking() {
     confirmCheckIn,
     confirmCheckOut,
     fetchCorporateBill,
-    toast
+    toast,
+    confirm
   };
 }
