@@ -121,6 +121,12 @@ const model = ref([
                         to: '/settings/manage/room-types',
                         visible: route.path.includes('/settings'), // Check for '/booking' in the path
                     },
+                    {
+                        label: 'Halls',
+                        icon: 'pi pi-th-large',
+                        to: '/settings/manage/halls',
+                        visible: route.path.includes('/settings'), // Check for '/booking' in the path
+                    },
                 ]
             },
             {

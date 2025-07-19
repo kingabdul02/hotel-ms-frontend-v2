@@ -88,6 +88,12 @@ const routes = [
                         component: () => import('@/views/pages/settings/ManageUsers.vue'),
                         meta: { auth: true }
                     },
+                    {
+                        path: '/settings/manage/halls',
+                        name: 'managehalls',
+                        component: () => import('@/views/pages/settings/ManageHalls.vue'),
+                        meta: { auth: true }
+                    },
                 ]
             },
             {
