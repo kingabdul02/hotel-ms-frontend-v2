@@ -15,6 +15,9 @@ export function useCorporateBooking() {
   const searchQuery = ref('');
   const selectedStatus = ref('');
   const expandedBookings = ref([]);
+  const showBookingDialog = ref(false);
+  const isEditMode = ref(false);
+  const bookingIdToEdit = ref(null);
   const corporateBookingForm = reactive({
     is_new_company: true,
     check_in_date: null,
@@ -67,44 +70,42 @@ export function useCorporateBooking() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const booking = response.data.data;
-      Object.assign(corporateBookingForm, {
-        is_new_company: !booking.company?.registration_number,
-        check_in_date: booking.check_in_date || null,
-        check_out_date: booking.check_out_date || null,
-        company: {
-          name: booking.company?.name || '',
-          address: booking.company?.address || '',
-          phone: booking.company?.phone || '',
-          email: booking.company?.email || ''
-        },
-        coordinator: {
-          full_name: booking.coordinator?.full_name || '',
-          email: booking.coordinator?.email || '',
-          phone: booking.coordinator?.phone || '',
-          nin: booking.coordinator?.nin || '',
-          id_card_file: booking.coordinator?.id_card_file || null
-        },
-        guests: booking.guests.map(guest => ({
-          id: guest.id,
-          full_name: guest.full_name || '',
-          email: guest.email || '',
-          phone: guest.phone || '',
-          room_id: guest.room?.id || null,
-          gender: guest.gender || 'Male',
-          is_checked_in: guest.is_checked_in || false,
-          is_checked_out: guest.is_checked_out || false
-        })),
-        expected_guests: booking.expected_guests || booking.guests.length, // Use backend's expected_guests
-        halls: booking.halls ? booking.halls.map(hall => ({
-          id: hall.id,
-          hall_id: hall.hall_id,
-          hall_name: hall.hall?.name || '',
-          start_date: hall.start_date,
-          end_date: hall.end_date,
-          amount: hall.amount || 0,
-          hall_price: hall.hall?.price || 0
-        })) : []
-      });
+      corporateBookingForm.is_new_company = !booking.company?.registration_number;
+      corporateBookingForm.check_in_date = booking.check_in_date || null;
+      corporateBookingForm.check_out_date = booking.check_out_date || null;
+      corporateBookingForm.company = {
+        name: booking.company?.name || '',
+        address: booking.company?.address || '',
+        phone: booking.company?.phone || '',
+        email: booking.company?.email || ''
+      };
+      corporateBookingForm.coordinator = {
+        full_name: booking.coordinator?.full_name || '',
+        email: booking.coordinator?.email || '',
+        phone: booking.coordinator?.phone || '',
+        nin: booking.coordinator?.nin || '',
+        id_card_file: booking.coordinator?.id_card_file || null
+      };
+      corporateBookingForm.guests = booking.guests.map(guest => ({
+        id: guest.id,
+        full_name: guest.full_name || '',
+        email: guest.email || '',
+        phone: guest.phone || '',
+        room_id: guest.room?.id || null,
+        gender: guest.gender || 'Male',
+        is_checked_in: guest.is_checked_in || false,
+        is_checked_out: guest.is_checked_out || false
+      }));
+      corporateBookingForm.expected_guests = booking.expected_guests || booking.guests.length;
+      corporateBookingForm.halls = booking.halls ? booking.halls.map(hall => ({
+        id: hall.id,
+        hall_id: hall.hall_id,
+        hall_name: hall.hall?.name || '',
+        start_date: hall.start_date,
+        end_date: hall.end_date,
+        amount: hall.amount || 0,
+        hall_price: hall.hall?.price || 0
+      })) : [];
       selectedCompany.value = booking.company?.registration_number ? booking.company : null;
       return booking;
     } catch (error) {
@@ -136,6 +137,7 @@ export function useCorporateBooking() {
       toast.add({ severity: 'success', summary: 'Success', detail: 'Corporate booking updated successfully', life: 3000 });
       resetCorporateBookingForm();
       await fetchCorporateBookings();
+      showBookingDialog.value = false;
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: error.response?.data?.message || 'Failed to update corporate booking', life: 3000 });
       console.error('Error updating corporate booking:', error);
@@ -265,6 +267,7 @@ export function useCorporateBooking() {
       toast.add({ severity: 'success', summary: 'Success', detail: 'Corporate booking created successfully', life: 3000 });
       resetCorporateBookingForm();
       await fetchCorporateBookings();
+      showBookingDialog.value = false;
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: error.response?.data?.message || 'Failed to create corporate booking', life: 3000 });
       console.error('Error creating corporate booking:', error);
@@ -453,6 +456,9 @@ export function useCorporateBooking() {
     confirmCheckOut,
     fetchCorporateBill,
     toast,
-    confirm
+    confirm,
+    showBookingDialog,
+    isEditMode,
+    bookingIdToEdit
   };
 }

@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
 import BookingsTab from './BookingsTab.vue';
-import CorporateBookingForm from './CorporateBookingForm.vue';
 import CorporateBookingManagement from './CorporateBookingManagement.vue';
 import { useBooking } from '@/composables/useBooking';
 
@@ -25,7 +24,7 @@ onMounted(() => {
         <template #header>
           <div class="tab-header">
             <i class="pi pi-calendar-check text-primary"></i>
-            <span class="ml-2 tab-title">Bookings</span>
+            <span class="ml-2 tab-title">Individual Bookings</span>
           </div>
         </template>
         <BookingsTab />
@@ -35,15 +34,6 @@ onMounted(() => {
           <div class="tab-header">
             <i class="pi pi-building text-primary"></i>
             <span class="ml-2 tab-title">Corporate Bookings</span>
-          </div>
-        </template>
-        <CorporateBookingForm />
-      </TabPanel>
-      <TabPanel>
-        <template #header>
-          <div class="tab-header">
-            <i class="pi pi-building text-primary"></i>
-            <span class="ml-2 tab-title">Manage Corporate Bookings</span>
           </div>
         </template>
         <CorporateBookingManagement />

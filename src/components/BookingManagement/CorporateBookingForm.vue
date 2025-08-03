@@ -19,6 +19,13 @@ import InputNumber from 'primevue/inputnumber';
 import { useCorporateBooking } from '@/composables/useCorporateBooking';
 import { formatCurrency } from '@/utils/currencyFormatter';
 
+const props = defineProps({
+  isEditMode: {
+    type: Boolean,
+    default: false
+  }
+});
+
 const {
   corporateBookingForm,
   selectedCompany,
@@ -36,6 +43,8 @@ const {
   removeHall,
   resetCorporateBookingForm,
   submitCorporateBooking,
+  updateCorporateBooking,
+  bookingIdToEdit,
   toast
 } = useCorporateBooking();
 
@@ -44,9 +53,6 @@ const genderOptions = [
   { label: 'Female', value: 'Female' },
   { label: 'Other', value: 'Other' }
 ];
-
-// Add expected guests field
-const expectedGuests = ref<number | null>(null);
 
 // Active tab management
 const activeIndex = ref(0);
@@ -67,7 +73,7 @@ const tabValidation = computed(() => {
   
   return {
     0: { // Booking Details
-      isValid: checkIn && checkOut && expectedGuests.value !== null && expectedGuests.value > 0,
+      isValid: checkIn && checkOut && corporateBookingForm.expected_guests !== null && corporateBookingForm.expected_guests > 0,
       errors: []
     },
     1: { // Company Information
@@ -84,7 +90,7 @@ const tabValidation = computed(() => {
     },
     3: { // Guests
       isValid: guests.length > 0 && 
-               guests.length <= (expectedGuests.value || Infinity) &&
+               guests.length <= (corporateBookingForm.expected_guests || Infinity) &&
                guests.every(guest => 
                  guest.full_name && 
                  guest.email && 
@@ -210,19 +216,19 @@ const bookingSummary = computed(() => {
     guestCount: guests.length,
     roomCount: new Set(guests.map(g => g.room_id).filter(Boolean)).size,
     hallCount: halls.length,
-    expectedGuests: expectedGuests.value || 0
+    expectedGuests: corporateBookingForm.expected_guests || 0
   };
 });
 
 // Modified addGuest to check against expected guests
 const handleAddGuest = () => {
-  if (corporateBookingForm.guests.length < (expectedGuests.value || Infinity)) {
+  if (corporateBookingForm.guests.length < (corporateBookingForm.expected_guests || Infinity)) {
     addGuest();
   } else {
     toast.add({
       severity: 'warn',
       summary: 'Guest Limit Reached',
-      detail: `Cannot add more than ${expectedGuests.value} guests as specified`,
+      detail: `Cannot add more than ${corporateBookingForm.expected_guests} guests as specified`,
       life: 3000
     });
   }
@@ -235,6 +241,14 @@ const handleAddHall = () => {
 
 const handleRemoveHall = (index) => {
   removeHall(index);
+};
+
+const handleSubmit = () => {
+  if (props.isEditMode) {
+    updateCorporateBooking(bookingIdToEdit.value, corporateBookingForm);
+  } else {
+    submitCorporateBooking();
+  }
 };
 
 const updateHallAmount = (index) => {
@@ -272,7 +286,7 @@ onMounted(() => {
       <div class="flex align-items-center justify-content-between">
         <div class="flex align-items-center gap-2">
           <i class="pi pi-building text-primary"></i>
-          <span>Create Corporate Booking</span>
+          <span>{{ isEditMode ? 'Edit Corporate Booking' : 'Create Corporate Booking' }}</span>
         </div>
         <div class="flex align-items-center gap-3">
           <small class="text-600">Progress:</small>
@@ -322,7 +336,7 @@ onMounted(() => {
                   <label for="expectedGuests" class="form-label">Expected Guests *</label>
                   <InputNumber
                     id="expectedGuests"
-                    v-model="expectedGuests"
+                    v-model="corporateBookingForm.expected_guests"
                     :min="1"
                     class="w-full"
                     placeholder="Enter number of guests"
@@ -499,8 +513,8 @@ onMounted(() => {
         <TabPanel header="Guests" leftIcon="pi pi-users">
           <div class="tab-content">
             <Message v-if="!tabValidation[3].isValid" severity="warn" class="mb-4">
-              <span v-if="corporateBookingForm.guests.length > (expectedGuests || Infinity)">
-                Number of guests exceeds declared expected guests ({{ expectedGuests }})
+              <span v-if="corporateBookingForm.guests.length > (corporateBookingForm.expected_guests || Infinity)">
+                Number of guests exceeds declared expected guests ({{ corporateBookingForm.expected_guests }})
               </span>
               <span v-else>
                 Please add at least one guest with complete information and room assignment.
@@ -513,10 +527,10 @@ onMounted(() => {
                 icon="pi pi-plus" 
                 class="p-button-success" 
                 @click="handleAddGuest"
-                :disabled="corporateBookingForm.guests.length >= (expectedGuests || Infinity)"
+                :disabled="corporateBookingForm.guests.length >= (corporateBookingForm.expected_guests || Infinity)"
               />
               <div class="flex align-items-center gap-2">
-                <Chip :label="`${corporateBookingForm.guests.length} / ${expectedGuests || 0} Guest${corporateBookingForm.guests.length !== 1 ? 's' : ''}`" />
+                <Chip :label="`${corporateBookingForm.guests.length} / ${corporateBookingForm.expected_guests || 0} Guest${corporateBookingForm.guests.length !== 1 ? 's' : ''}`" />
                 <small v-if="availableRooms.length === 0" class="text-orange-500">
                   Please select check-in and check-out dates first
                 </small>
@@ -1038,11 +1052,11 @@ onMounted(() => {
           </div>
           
           <Button
-            :label="activeIndex === totalTabs - 1 ? 'Complete' : 'Next'"
+            :label="activeIndex === totalTabs - 1 ? (isEditMode ? 'Update' : 'Complete') : 'Next'"
             :icon="activeIndex === totalTabs - 1 ? 'pi pi-check' : 'pi pi-chevron-right'"
             iconPos="right"
             :class="activeIndex === totalTabs - 1 ? 'p-button-success' : ''"
-            @click="activeIndex === totalTabs - 1 ? submitCorporateBooking() : goToNextTab()"
+            @click="activeIndex === totalTabs - 1 ? handleSubmit() : goToNextTab()"
             :disabled="activeIndex === totalTabs - 1 ? !isFormValid : !tabValidation[activeIndex]?.isValid"
           />
         </div>
