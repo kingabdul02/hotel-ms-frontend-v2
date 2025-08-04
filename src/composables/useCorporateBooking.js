@@ -144,15 +144,15 @@ export function useCorporateBooking() {
     }
   };
 
-  const fetchAvailableRooms = async () => {
-    if (!corporateBookingForm.check_in_date || !corporateBookingForm.check_out_date) return;
+          const fetchAvailableRooms = async (check_in_date, check_out_date) => {
+    if (!check_in_date || !check_out_date) return;
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
     try {
       const response = await axiosInstance.get('/rooms', {
         params: {
-          check_in_date: corporateBookingForm.check_in_date,
-          check_out_date: corporateBookingForm.check_out_date
+          check_in_date: check_in_date,
+          check_out_date: check_out_date
         },
         headers: { Authorization: `Bearer ${token}` },
       });

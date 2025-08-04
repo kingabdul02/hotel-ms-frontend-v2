@@ -14,7 +14,9 @@ import Dialog from 'primevue/dialog';
 import { useCorporateBooking } from '@/composables/useCorporateBooking';
 import { useRouter } from 'vue-router';
 import StatisticsCards from './StatisticsCards.vue';
+import EditCorporateBookingModal from './EditCorporateBookingModal.vue';
 import CorporateBookingForm from './CorporateBookingForm.vue';
+
 
 // Types
 interface Guest {
@@ -79,7 +81,8 @@ const {
   confirm,
   showBookingDialog,
   isEditMode,
-  bookingIdToEdit
+  bookingIdToEdit,
+  corporateBookingForm
 } = useCorporateBooking();
 
 // Reactive state
@@ -87,6 +90,9 @@ const selectedGuest = ref<Guest | null>(null);
 const showGuestDialog = ref(false);
 const expandedRows = ref<CorporateBooking[]>([]);
 const isSearching = ref(false);
+const showEditModal = ref(false);
+const selectedBookingForEdit = ref(null);
+const showCreateModal = ref(false);
 
 // Constants
 const STATUS_OPTIONS = [
@@ -168,22 +174,25 @@ const openCreateBookingDialog = () => {
   resetCorporateBookingForm();
   isEditMode.value = false;
   bookingIdToEdit.value = null;
-  showBookingDialog.value = true;
+  showCreateModal.value = true;
 };
 
 const openEditBookingDialog = async (booking: CorporateBooking) => {
-  resetCorporateBookingForm();
-  bookingIdToEdit.value = booking.id;
-  isEditMode.value = true;
-  await fetchBookingById(booking.id);
-  showBookingDialog.value = true;
+  const bookingDetails = await fetchBookingById(booking.id);
+  if (bookingDetails) {
+    selectedBookingForEdit.value = bookingDetails;
+    showEditModal.value = true;
+  }
 };
 
-const closeBookingDialog = () => {
-  showBookingDialog.value = false;
-  resetCorporateBookingForm();
-  bookingIdToEdit.value = null;
-  isEditMode.value = false;
+const handleBookingCreation = async () => {
+  showCreateModal.value = false;
+  await fetchCorporateBookings();
+};
+
+const handleBookingUpdated = async () => {
+  showEditModal.value = false;
+  await fetchCorporateBookings();
 };
 
 const viewBill = (booking: CorporateBooking) => {
@@ -514,20 +523,17 @@ watch(searchQuery, handleSearch, { debounce: 500 });
       </template>
     </Card>
 
-    <!-- Booking Form Dialog -->
-    <Dialog
-      v-model:visible="showBookingDialog"
-      :style="{ width: '90vw', maxWidth: '1200px' }"
-      :header="isEditMode ? 'Edit Corporate Booking' : 'Create Corporate Booking'"
-      :modal="true"
-      class="booking-form-dialog"
-      :closable="true"
-      @hide="closeBookingDialog"
-    >
-      <CorporateBookingForm :is-edit-mode="isEditMode" :booking-form-data="isEditMode ? { ...corporateBookingForm } : null" @close="closeBookingDialog" />
+    <Dialog v-model:visible="showCreateModal" modal header="Create Corporate Booking" :style="{ width: '50vw' }">
+        <CorporateBookingForm @close="showCreateModal = false" @booking-created="handleBookingCreation" />
     </Dialog>
 
-    <!-- Guest Details Dialog -->
+    <EditCorporateBookingModal 
+        :booking="selectedBookingForEdit" 
+        :visible="showEditModal" 
+        @update:visible="showEditModal = $event" 
+        @booking-updated="handleBookingUpdated" 
+    />
+
     <Dialog
       v-model:visible="showGuestDialog"
       :style="{ width: '90vw', maxWidth: '600px' }"
