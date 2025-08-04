@@ -102,25 +102,32 @@ const tabValidation = computed(() => {
       errors: []
     },
     4: { // Halls
-      isValid: true, // Halls are optional
+      isValid: true, // Halls are optional and do not affect progress
       errors: []
     },
     5: { // Summary
-      isValid: true,
+      isValid: true, // Summary is for review, no validation needed
       errors: []
     }
   };
 });
 
-// Overall form validation
 const isFormValid = computed(() => {
-  return Object.values(tabValidation.value).every(tab => tab.isValid);
+  const validations = tabValidation.value;
+  // Check all tabs except the optional 'Halls' tab if it's not used.
+  return Object.keys(validations).every(tabIndex => {
+    if (tabIndex === '4' && corporateBookingForm.halls.length === 0) {
+      return true; // Skip validation for optional, empty Halls tab
+    }
+    return validations[tabIndex].isValid;
+  });
 });
 
 // Progress calculation
 const completionProgress = computed(() => {
-  const validTabs = Object.values(tabValidation.value).filter(tab => tab.isValid).length;
-  return Math.round((validTabs / (totalTabs - 1)) * 100);
+  const requiredTabs = Object.keys(tabValidation.value).filter(key => key !== '4' || corporateBookingForm.halls.length > 0); // Include Halls if filled
+  const validTabs = requiredTabs.filter(key => tabValidation.value[key].isValid).length;
+  return Math.round((validTabs / requiredTabs.length) * 100);
 });
 
 // Navigation methods
@@ -424,7 +431,7 @@ onMounted(() => {
                       id="companyPhone"
                       v-model="corporateBookingForm.company.phone"
                       class="w-full"
- ters                  placeholder="Enter company phone"
+                      placeholder="Enter company phone"
                       :disabled="!corporateBookingForm.is_new_company"
                     />
                   </div>
@@ -1001,19 +1008,12 @@ onMounted(() => {
 
             <!-- Action Buttons -->
             <div class="form-actions mt-5">
-              <div class="flex justify-content-between">
+              <div class="flex justify-content-end">
                 <Button
                   label="Reset Form"
                   icon="pi pi-refresh"
                   class="p-button-outlined p-button-secondary"
                   @click="resetCorporateBookingForm"
-                />
-                <Button
-                  label="Create Booking"
-                  icon="pi pi-check"
-                  class="p-button-success"
-                  @click="submitCorporateBooking"
-                  :disabled="!isFormValid"
                 />
               </div>
             </div>

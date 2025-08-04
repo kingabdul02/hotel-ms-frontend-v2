@@ -524,7 +524,7 @@ watch(searchQuery, handleSearch, { debounce: 500 });
       :closable="true"
       @hide="closeBookingDialog"
     >
-      <CorporateBookingForm :is-edit-mode="isEditMode" :booking-form-data="isEditMode ? { ...corporateBookingForm } : null" />
+      <CorporateBookingForm :is-edit-mode="isEditMode" :booking-form-data="isEditMode ? { ...corporateBookingForm } : null" @close="closeBookingDialog" />
     </Dialog>
 
     <!-- Guest Details Dialog -->

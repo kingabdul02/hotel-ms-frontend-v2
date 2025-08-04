@@ -220,7 +220,7 @@ const props = defineProps<{
   visible: boolean
 }>();
 
-const emit = defineEmits(['update:visible']);
+const emit = defineEmits(['update:visible', 'booking-updated']);
 
 
 
@@ -305,6 +305,7 @@ const handleExpectedGuestsChange = () => {
 const handleSubmit = async () => {
   try {
     await updateCorporateBooking(props.booking.id, props.booking);
+    emit('booking-updated');
     emit('update:visible', false);
   } catch (error) {
     // Error handled by composable's toast

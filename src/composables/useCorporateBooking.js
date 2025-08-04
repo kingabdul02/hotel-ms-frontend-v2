@@ -135,9 +135,6 @@ export function useCorporateBooking() {
         }
       });
       toast.add({ severity: 'success', summary: 'Success', detail: 'Corporate booking updated successfully', life: 3000 });
-      resetCorporateBookingForm();
-      await fetchCorporateBookings();
-      showBookingDialog.value = false;
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: error.response?.data?.message || 'Failed to update corporate booking', life: 3000 });
       console.error('Error updating corporate booking:', error);

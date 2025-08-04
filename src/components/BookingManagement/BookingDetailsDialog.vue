@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, defineEmits, ref } from 'vue';
+import { defineProps, defineEmits, ref, computed, watch } from 'vue';
 import Dialog from 'primevue/dialog';
 import Card from 'primevue/card';
 import Button from 'primevue/button';
@@ -37,6 +37,14 @@ const emits = defineEmits<{
 const { handleCheckIn, handleCheckOut } = useBooking();
 const toast = useToast();
 
+// Local reactive booking state that syncs with props
+const localBooking = ref(props.selectedBooking ? JSON.parse(JSON.stringify(props.selectedBooking)) : null);
+
+// Watch for changes in props and update local state
+watch(() => props.selectedBooking, (newBooking) => {
+  localBooking.value = newBooking ? JSON.parse(JSON.stringify(newBooking)) : null;
+}, { deep: true });
+
 // Payment dialog state
 const showPaymentDialog = ref(false);
 const selectedPaymentMethod = ref('');
@@ -72,12 +80,19 @@ const handleCompletePayment = async () => {
   }
 
   try {
-    await axiosInstance.post(`/admin/complete-payment`, {
-      booking_id: props.selectedBooking?.booking_id,
+    const response = await axiosInstance.post(`/admin/complete-payment`, {
+      booking_id: localBooking.value?.booking_id,
       payment_method: selectedPaymentMethod.value
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });
+
+    // Update the local booking object immediately for instant UI feedback
+    if (localBooking.value && response.data.success) {
+      localBooking.value.payment_status = 'paid';
+      // Trigger reactivity by reassigning the object
+      localBooking.value = { ...localBooking.value };
+    }
 
     toast.add({ 
       severity: 'success', 
@@ -86,9 +101,11 @@ const handleCompletePayment = async () => {
       life: 3000 
     });
 
+    // Close the payment dialog
     showPaymentDialog.value = false;
     selectedPaymentMethod.value = '';
-    // Emit update to refresh the booking data
+    
+    // Emit update to refresh the booking data from parent
     emits('update');
   } catch (error) {
     toast.add({ 
@@ -102,14 +119,52 @@ const handleCompletePayment = async () => {
 
 // Handle checkout with payment check
 const handleCheckOutWithPaymentCheck = async () => {
-  if (props.selectedBooking?.payment_status !== 'paid') {
+  if (localBooking.value?.payment_status !== 'paid') {
     showPaymentDialog.value = true;
     return;
   }
   
-  // If payment is already made, proceed with normal checkout
-  await handleCheckOut(props.selectedBooking.booking_id);
-  emits('update');
+  try {
+    // If payment is already made, proceed with normal checkout
+    await handleCheckOut(localBooking.value.booking_id);
+    
+    // Update the local booking object immediately for instant UI feedback
+    if (localBooking.value) {
+      localBooking.value.is_checked_out = true;
+    }
+    
+    // Emit update to refresh the booking data from parent
+    emits('update');
+  } catch (error) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: 'Failed to check out guest', 
+      life: 3000 
+    });
+  }
+};
+
+// Handle check-in with immediate UI feedback
+const handleCheckInGuest = async () => {
+  try {
+    await handleCheckIn(localBooking.value?.booking_id);
+    
+    // Update the local booking object immediately for instant UI feedback
+    if (localBooking.value) {
+      localBooking.value.is_checked_in = true;
+    }
+    
+    // Emit update to refresh the booking data from parent
+    emits('update');
+  } catch (error) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: 'Failed to check in guest', 
+      life: 3000 
+    });
+  }
 };
 </script>
 
@@ -121,25 +176,25 @@ const handleCheckOutWithPaymentCheck = async () => {
     :style="{ width: '70vw' }"
     @update:visible="emits('update:visible', $event)"
   >
-    <div v-if="props.selectedBooking" class="booking-details">
+    <div v-if="localBooking" class="booking-details">
       <Card class="booking-detail-card">
         <template #content>
           <div class="flex align-items-start flex-column lg:justify-content-between lg:flex-row">
             <div class="booking-customer-info">
               <div class="customer-name">
                 <i class="pi pi-user mr-2 text-primary"></i>
-                <span class="text-2xl font-bold">{{ props.selectedBooking.user.name }}</span>
+                <span class="text-2xl font-bold">{{ localBooking.user.name }}</span>
               </div>
               <div class="booking-status-info">
                 <div class="status-item">
                   <i class="pi pi-sign-in mr-2"></i>
                   <Tag
-                    v-if="props.selectedBooking.is_checked_in"
+                    v-if="localBooking.is_checked_in"
                     severity="success"
                     value="Checked In"
                   />
                   <Tag
-                    v-else-if="props.selectedBooking.is_checked_out"
+                    v-else-if="localBooking.is_checked_out"
                     severity="contrast"
                     value="Checked Out"
                   />
@@ -147,37 +202,37 @@ const handleCheckOutWithPaymentCheck = async () => {
                 </div>
                 <div class="status-item">
                   <i class="pi pi-money-bill mr-2"></i>
-                  <span class="price-text">{{ formatCurrency(props.selectedBooking.total_amount) }}</span>
+                  <span class="price-text">{{ formatCurrency(localBooking.total_amount) }}</span>
                 </div>
                 <div class="status-item">
                   <i class="pi pi-clock mr-2"></i>
-                  <span>{{ formatDateTime(props.selectedBooking.check_in_date) }}</span>
+                  <span>{{ formatDateTime(localBooking.check_in_date) }}</span>
                 </div>
               </div>
             </div>
             <div class="booking-actions">
               <Button
-                v-if="!props.selectedBooking.is_checked_out && !props.selectedBooking.is_checked_in"
+                v-if="!localBooking.is_checked_out && !localBooking.is_checked_in"
                 label="Check In Guest"
                 icon="pi pi-sign-in"
                 class="p-button-success mr-2"
-                @click="handleCheckIn(props.selectedBooking.booking_id).then(() => emits('update'))"
+                @click="handleCheckInGuest"
               />
               <Button
-                v-if="props.selectedBooking.payment_status !== 'paid' && !props.selectedBooking.is_checked_out"
+                v-if="localBooking.payment_status !== 'paid' && !localBooking.is_checked_out"
                 label="Make Payment"
                 icon="pi pi-money-bill"
                 class="p-button-info mr-2"
                 @click="showPaymentDialog = true"
               />
               <Button
-                v-if="!props.selectedBooking.is_checked_out && props.selectedBooking.is_checked_in"
+                v-if="!localBooking.is_checked_out && localBooking.is_checked_in"
                 label="Check Out Guest"
                 icon="pi pi-sign-out"
                 class="p-button-danger"
                 @click="handleCheckOutWithPaymentCheck"
               />
-              <p v-if="props.selectedBooking.is_checked_out" class="text-600">Already Checked Out</p>
+              <p v-if="localBooking.is_checked_out" class="text-600">Already Checked Out</p>
             </div>
           </div>
         </template>
@@ -187,40 +242,40 @@ const handleCheckOutWithPaymentCheck = async () => {
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Room:</label>
-              <span class="detail-value">{{ props.selectedBooking.room.name }}</span>
+              <span class="detail-value">{{ localBooking.room.name }}</span>
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Customer:</label>
-              <span class="detail-value">{{ props.selectedBooking.user.name }}</span>
+              <span class="detail-value">{{ localBooking.user.name }}</span>
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Room Capacity:</label>
-              <span class="detail-value">{{ props.selectedBooking.no_of_guests }} guests</span>
+              <span class="detail-value">{{ localBooking.no_of_guests }} guests</span>
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Payment Status:</label>
               <Tag
-                :value="props.selectedBooking.payment_status"
-                :severity="props.selectedBooking.payment_status === 'paid' ? 'success' : 'warning'"
+                :value="localBooking.payment_status"
+                :severity="localBooking.payment_status === 'paid' ? 'success' : 'warning'"
               />
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Check-In Time:</label>
-              <span class="detail-value">{{ formatDateTime(props.selectedBooking.check_in_date) }}</span>
+              <span class="detail-value">{{ formatDateTime(localBooking.check_in_date) }}</span>
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Check-Out Time:</label>
-              <span class="detail-value">{{ formatDateTime(props.selectedBooking.check_out_date) }}</span>
+              <span class="detail-value">{{ formatDateTime(localBooking.check_out_date) }}</span>
             </div>
           </div>
         </div>
@@ -256,7 +311,7 @@ const handleCheckOutWithPaymentCheck = async () => {
         <div class="mb-3 p-3 surface-100 border-round">
           <div class="flex justify-content-between align-items-center">
             <span class="font-semibold">Total Amount:</span>
-            <span class="text-xl font-bold text-primary">{{ formatCurrency(props.selectedBooking?.total_amount || 0) }}</span>
+            <span class="text-xl font-bold text-primary">{{ formatCurrency(localBooking?.total_amount || 0) }}</span>
           </div>
         </div>
         <div class="flex flex-column gap-3">

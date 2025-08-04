@@ -634,7 +634,7 @@ watch(
     <!-- Global Components -->
     <ConfirmDialog />
     <Toast />
-    <EditCorporateBookingModal :booking="corporateBookingForm" v-model:visible="showEditBookingDialog" />
+    <EditCorporateBookingModal :booking="corporateBookingForm" v-model:visible="showEditBookingDialog" @booking-updated="fetchCorporateBookings" />
   </div>
 </template>
 
