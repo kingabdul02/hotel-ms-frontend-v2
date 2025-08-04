@@ -16,6 +16,7 @@ import AutoComplete from 'primevue/autocomplete';
 import { useCorporateBooking } from '@/composables/useCorporateBooking';
 import { useRouter } from 'vue-router';
 import StatisticsCards from './StatisticsCards.vue';
+import EditCorporateBookingModal from '@/components/BookingManagement/EditCorporateBookingModal.vue';
 
 // Types
 interface Guest {
@@ -97,9 +98,12 @@ const selectedGuest = ref<Guest | null>(null);
 const showGuestDialog = ref(false);
 const expandedRows = ref<CorporateBooking[]>([]);
 const isSearching = ref(false);
-const showBookingDialog = ref(false);
-const isEditMode = ref(false);
-const bookingIdToEdit = ref<string | null>(null);
+const showEditBookingDialog = ref(false);
+
+
+
+
+const showEditBookingDialog = ref(false);
 
 // Constants
 const STATUS_OPTIONS = [
@@ -111,19 +115,13 @@ const STATUS_OPTIONS = [
 
 const ITEMS_PER_PAGE = 10;
 
-const guestGenderOptions = [
-  { label: 'Male', value: 'Male' },
-  { label: 'Female', value: 'Female' },
-];
+
 
 // Computed properties
 const hasBookings = computed(() => corporateBookings.value.length > 0);
 const isEmptyState = computed(() => !loading.value && !hasBookings.value && !searchQuery.value);
 const isNoSearchResults = computed(() => !loading.value && !hasBookings.value && searchQuery.value);
-const canAddGuest = computed(() => corporateBookingForm.guests.length < corporateBookingForm.expected_guests);
-const minExpectedGuests = computed(() => {
-  return corporateBookingForm.guests.filter(guest => guest.is_checked_in || guest.is_checked_out).length;
-});
+
 
 const statisticsData = computed(() => ({
   recentBookingsCount: corporateBookings.value.length,
@@ -164,8 +162,9 @@ const handleRowExpand = (event: { data: CorporateBooking }) => {
   expandedRows.value = [event.data];
 };
 
-const handleRowCollapse = () => {
-  expandedRows.value = [];
+const openEditBookingDialog = async (booking: CorporateBooking) => {
+  await fetchBookingById(booking.id);
+  showEditBookingDialog.value = true;
 };
 
 const handleCheckIn = async (guest: Guest) => {
@@ -186,102 +185,19 @@ const handleCheckOut = async (guest: Guest) => {
   }
 };
 
-const openCreateBookingDialog = () => {
-  resetCorporateBookingForm();
-  isEditMode.value = false;
-  bookingIdToEdit.value = null;
-  showBookingDialog.value = true;
-};
 
-const openEditBookingDialog = async (booking: CorporateBooking) => {
-  resetCorporateBookingForm();
-  bookingIdToEdit.value = booking.id;
-  isEditMode.value = true;
-  await fetchBookingById(booking.id);
-  showBookingDialog.value = true;
-};
 
-const closeBookingDialog = () => {
-  showBookingDialog.value = false;
-  resetCorporateBookingForm();
-  bookingIdToEdit.value = null;
-  isEditMode.value = false;
-};
 
-const handleAddGuest = () => {
-  if (!canAddGuest.value) {
-    toast.add({ severity: 'warn', summary: 'Limit Reached', detail: 'Cannot add more guests than expected.', life: 3000 });
-    return;
-  }
-  addGuest();
-};
 
-const handleRemoveGuest = (index: number) => {
-  const guest = corporateBookingForm.guests[index];
-  if (guest.is_checked_in || guest.is_checked_out) {
-    toast.add({ severity: 'warn', summary: 'Cannot Remove', detail: 'Checked-in or checked-out guests cannot be removed.', life: 3000 });
-    return;
-  }
-  confirm.require({
-    message: `Are you sure you want to remove ${guest.full_name || 'this guest'}?`,
-    header: 'Confirm Guest Removal',
-    icon: 'pi pi-exclamation-triangle',
-    accept: () => {
-      removeGuest(index);
-      toast.add({ severity: 'success', summary: 'Guest Removed', detail: 'Guest has been removed.', life: 3000 });
-    },
-  });
-};
 
-const handleExpectedGuestsChange = () => {
-  const currentGuestCount = corporateBookingForm.guests.length;
-  if (corporateBookingForm.expected_guests < minExpectedGuests.value) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Invalid Input',
-      detail: `Cannot set expected guests below ${minExpectedGuests.value} (number of checked-in or checked-out guests).`,
-      life: 3000,
-    });
-    corporateBookingForm.expected_guests = minExpectedGuests.value;
-  } else if (corporateBookingForm.expected_guests < currentGuestCount) {
-    const guestsToRemove = corporateBookingForm.guests
-      .slice(corporateBookingForm.expected_guests)
-      .filter(guest => !guest.is_checked_in && !guest.is_checked_out);
-    if (guestsToRemove.length > 0) {
-      confirm.require({
-        message: `Reducing the number of guests will remove ${guestsToRemove.length} guest(s). Confirm?`,
-        header: 'Confirm Guest Removal',
-        icon: 'pi pi-exclamation-triangle',
-        accept: () => {
-          corporateBookingForm.guests = corporateBookingForm.guests.slice(0, corporateBookingForm.expected_guests);
-          toast.add({ severity: 'success', summary: 'Guests Removed', detail: 'Excess guests have been removed.', life: 3000 });
-        },
-        reject: () => {
-          corporateBookingForm.expected_guests = currentGuestCount;
-        },
-      });
-    }
-  }
-};
 
-const handleSubmit = async () => {
-  try {
-    if (!isEditMode.value && !corporateBookingForm.is_new_company && !selectedCompany.value) {
-      toast.add({ severity: 'warn', summary: 'Invalid Input', detail: 'Please select a company.', life: 3000 });
-      return;
-    }
-    if (isEditMode.value && bookingIdToEdit.value) {
-      await updateCorporateBooking(bookingIdToEdit.value, corporateBookingForm);
-    } else {
-      await submitCorporateBooking();
-    }
-    showBookingDialog.value = false;
-    resetCorporateBookingForm();
-    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
-  } catch (error) {
-    // Error handled by composable's toast
-  }
-};
+
+
+
+
+
+
+
 
 const viewBill = (booking: CorporateBooking) => {
   router.push({
@@ -358,13 +274,7 @@ watch(
             <span class="total-count" v-if="totalRecords > 0">
               {{ totalRecords }} total bookings
             </span>
-            <Button
-              label="Create Booking"
-              icon="pi pi-plus"
-              class="p-button-success p-button-sm"
-              @click="openCreateBookingDialog"
-              aria-label="Create new corporate booking"
-            />
+            
           </div>
         </div>
       </template>
@@ -384,13 +294,7 @@ watch(
             <i class="pi pi-calendar empty-icon" aria-hidden="true"></i>
             <h3>No bookings yet</h3>
             <p>Corporate bookings will appear here once they are created.</p>
-            <Button 
-              label="Create Booking" 
-              icon="pi pi-plus"
-              class="p-button-success"
-              @click="openCreateBookingDialog"
-              aria-label="Create new corporate booking"
-            />
+            
           </div>
         </div>
 
@@ -619,212 +523,7 @@ watch(
       </template>
     </Card>
 
-    <!-- Booking Form Dialog -->
-    <Dialog
-      v-model:visible="showBookingDialog"
-      :style="{ width: '90vw', maxWidth: '1200px' }"
-      :header="isEditMode ? 'Edit Corporate Booking' : 'Create Corporate Booking'"
-      :modal="true"
-      class="booking-form-dialog"
-      :closable="true"
-      @hide="closeBookingDialog"
-    >
-      <div class="form-container">
-        <!-- Company Selection -->
-        <section class="form-section">
-          <h3>Company Details</h3>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Company Name</label>
-              <InputText
-                v-model="corporateBookingForm.company.name"
-                placeholder="Company name"
-                :disabled="isEditMode"
-              />
-            </div>
-            <div class="form-group">
-              <label>Email</label>
-              <InputText
-                v-model="corporateBookingForm.company.email"
-                placeholder="Company email"
-                :disabled="isEditMode"
-              />
-            </div>
-            <div class="form-group">
-              <label>Phone</label>
-              <InputText
-                v-model="corporateBookingForm.company.phone"
-                placeholder="Company phone"
-                :disabled="isEditMode"
-              />
-            </div>
-          </div>
-        </section>
-
-        <!-- Coordinator Details -->
-        <section class="form-section">
-          <h3>Coordinator Details</h3>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Full Name</label>
-              <InputText
-                v-model="corporateBookingForm.coordinator.full_name"
-                placeholder="Full name"
-                :disabled="isEditMode"
-              />
-            </div>
-            <div class="form-group">
-              <label>Email</label>
-              <InputText
-                v-model="corporateBookingForm.coordinator.email"
-                placeholder="Email"
-                :disabled="isEditMode"
-              />
-            </div>
-            <div class="form-group">
-              <label>Phone</label>
-              <InputText
-                v-model="corporateBookingForm.coordinator.phone"
-                placeholder="Phone"
-                :disabled="isEditMode"
-              />
-            </div>
-            <div class="form-group">
-              <label>NIN</label>
-              <InputText
-                v-model="corporateBookingForm.coordinator.nin"
-                placeholder="NIN"
-                :disabled="isEditMode"
-              />
-            </div>
-          </div>
-        </section>
-
-        <!-- Booking Details -->
-        <section class="form-section">
-          <h3>Booking Details</h3>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Check-in Date</label>
-              <Calendar
-                v-model="corporateBookingForm.check_in_date"
-                showIcon
-                dateFormat="yy-mm-dd"
-                :disabled="isEditMode"
-              />
-            </div>
-            <div class="form-group">
-              <label>Check-out Date</label>
-              <Calendar
-                v-model="corporateBookingForm.check_out_date"
-                showIcon
-                dateFormat="yy-mm-dd"
-                :disabled="isEditMode"
-              />
-            </div>
-            <div class="form-group">
-              <label>Expected Guests</label>
-              <InputText
-                v-model.number="corporateBookingForm.expected_guests"
-                type="number"
-                placeholder="Number of guests"
-                :min="minExpectedGuests"
-                @input="handleExpectedGuestsChange"
-              />
-            </div>
-          </div>
-        </section>
-
-        <!-- Guest Details -->
-        <section class="form-section">
-          <h3>Guest Details</h3>
-          <div v-for="(guest, index) in corporateBookingForm.guests" :key="guest.id" class="guest-section">
-            <div class="guest-header">
-              <h4>Guest {{ index + 1 }}</h4>
-              <Button
-                icon="pi pi-trash"
-                severity="danger"
-                text
-                :disabled="guest.is_checked_in || guest.is_checked_out"
-                @click="handleRemoveGuest(index)"
-              />
-            </div>
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Full Name</label>
-                <InputText
-                  v-model="guest.full_name"
-                  :disabled="guest.is_checked_in || guest.is_checked_out"
-                  placeholder="Full name"
-                />
-              </div>
-              <div class="form-group">
-                <label>Email</label>
-                <InputText
-                  v-model="guest.email"
-                  :disabled="guest.is_checked_in || guest.is_checked_out"
-                  placeholder="Email"
-                />
-              </div>
-              <div class="form-group">
-                <label>Phone</label>
-                <InputText
-                  v-model="guest.phone"
-                  :disabled="guest.is_checked_in || guest.is_checked_out"
-                  placeholder="Phone"
-                />
-              </div>
-              <div class="form-group">
-                <label>Gender</label>
-                <Dropdown
-                  v-model="guest.gender"
-                  :options="guestGenderOptions"
-                  option-label="label"
-                  option-value="value"
-                  :disabled="guest.is_checked_in || guest.is_checked_out"
-                  placeholder="Select gender"
-                />
-              </div>
-              <div class="form-group">
-                <label>Room</label>
-                <Dropdown
-                  v-model="guest.room_id"
-                  :options="availableRooms"
-                  option-label="name"
-                  option-value="id"
-                  :disabled="guest.is_checked_in || guest.is_checked_out"
-                  placeholder="Select room"
-                />
-              </div>
-            </div>
-          </div>
-          <Button
-            label="Add Guest"
-            icon="pi pi-plus"
-            class="p-button-outlined p-button-success"
-            :disabled="!canAddGuest"
-            @click="handleAddGuest"
-          />
-        </section>
-      </div>
-
-      <template #footer>
-        <Button
-          label="Cancel"
-          icon="pi pi-times"
-          text
-          @click="closeBookingDialog"
-          aria-label="Cancel booking"
-        />
-        <Button
-          :label="isEditMode ? 'Update Booking' : 'Create Booking'"
-          icon="pi pi-save"
-          class="p-button-success"
-          @click="handleSubmit"
-          aria-label="Save booking"
-        />
-      </template>
-    </Dialog>
+    
 
     <!-- Guest Details Dialog -->
     <Dialog
@@ -935,6 +634,7 @@ watch(
     <!-- Global Components -->
     <ConfirmDialog />
     <Toast />
+    <EditCorporateBookingModal :booking="corporateBookingForm" v-model:visible="showEditBookingDialog" />
   </div>
 </template>
 

@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, ref } from 'vue';
 import Dialog from 'primevue/dialog';
 import Card from 'primevue/card';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
+import Dropdown from 'primevue/dropdown';
 import { useBooking } from '@/composables/useBooking';
+import { useToast } from 'primevue/usetoast';
+import axiosInstance from '@/service/AxiosInstance';
 import { formatDateTime } from '@/utils/dateTimeFormatter';
 import { formatCurrency } from '@/utils/currencyFormatter';
 
 // Define props with TypeScript validation
-defineProps<{
+const props = defineProps<{
   visible: boolean;
   selectedBooking: {
     booking_id: string;
@@ -26,41 +29,117 @@ defineProps<{
 }>();
 
 // Define emits
-defineEmits<{
+const emits = defineEmits<{
   (e: 'update:visible', value: boolean): void;
   (e: 'update'): void;
 }>();
 
 const { handleCheckIn, handleCheckOut } = useBooking();
+const toast = useToast();
+
+// Payment dialog state
+const showPaymentDialog = ref(false);
+const selectedPaymentMethod = ref('');
+const paymentMethods = [
+  { label: 'Cash', value: 'cash' },
+  { label: 'POS', value: 'pos' },
+  { label: 'Transfer', value: 'transfer' }
+];
+
+// Handle payment completion
+const handleCompletePayment = async () => {
+  if (!selectedPaymentMethod.value) {
+    toast.add({ 
+      severity: 'warn', 
+      summary: 'Warning', 
+      detail: 'Please select a payment method', 
+      life: 3000 
+    });
+    return;
+  }
+
+  const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+  const token = userData?.token;
+
+  if (!token) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: 'Authentication token missing', 
+      life: 3000 
+    });
+    return;
+  }
+
+  try {
+    await axiosInstance.post(`/admin/complete-payment`, {
+      booking_id: props.selectedBooking?.booking_id,
+      payment_method: selectedPaymentMethod.value
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Success', 
+      detail: 'Payment completed successfully', 
+      life: 3000 
+    });
+
+    showPaymentDialog.value = false;
+    selectedPaymentMethod.value = '';
+    // Emit update to refresh the booking data
+    emits('update');
+  } catch (error) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: error.response?.data?.message || 'Failed to complete payment', 
+      life: 3000 
+    });
+  }
+};
+
+// Handle checkout with payment check
+const handleCheckOutWithPaymentCheck = async () => {
+  if (props.selectedBooking?.payment_status !== 'paid') {
+    showPaymentDialog.value = true;
+    return;
+  }
+  
+  // If payment is already made, proceed with normal checkout
+  await handleCheckOut(props.selectedBooking.booking_id);
+  emits('update');
+};
 </script>
 
 <template>
   <Dialog
-    :visible="visible"
+    :visible="props.visible"
     header="Booking Details"
     :modal="true"
     :style="{ width: '70vw' }"
-    @update:visible="$emit('update:visible', $event)"
+    @update:visible="emits('update:visible', $event)"
   >
-    <div v-if="selectedBooking" class="booking-details">
+    <div v-if="props.selectedBooking" class="booking-details">
       <Card class="booking-detail-card">
         <template #content>
           <div class="flex align-items-start flex-column lg:justify-content-between lg:flex-row">
             <div class="booking-customer-info">
               <div class="customer-name">
                 <i class="pi pi-user mr-2 text-primary"></i>
-                <span class="text-2xl font-bold">{{ selectedBooking.user.name }}</span>
+                <span class="text-2xl font-bold">{{ props.selectedBooking.user.name }}</span>
               </div>
               <div class="booking-status-info">
                 <div class="status-item">
                   <i class="pi pi-sign-in mr-2"></i>
                   <Tag
-                    v-if="selectedBooking.is_checked_in"
+                    v-if="props.selectedBooking.is_checked_in"
                     severity="success"
                     value="Checked In"
                   />
                   <Tag
-                    v-else-if="selectedBooking.is_checked_out"
+                    v-else-if="props.selectedBooking.is_checked_out"
                     severity="contrast"
                     value="Checked Out"
                   />
@@ -68,30 +147,37 @@ const { handleCheckIn, handleCheckOut } = useBooking();
                 </div>
                 <div class="status-item">
                   <i class="pi pi-money-bill mr-2"></i>
-                  <span class="price-text">{{ formatCurrency(selectedBooking.total_amount) }}</span>
+                  <span class="price-text">{{ formatCurrency(props.selectedBooking.total_amount) }}</span>
                 </div>
                 <div class="status-item">
                   <i class="pi pi-clock mr-2"></i>
-                  <span>{{ formatDateTime(selectedBooking.check_in_date) }}</span>
+                  <span>{{ formatDateTime(props.selectedBooking.check_in_date) }}</span>
                 </div>
               </div>
             </div>
             <div class="booking-actions">
               <Button
-                v-if="!selectedBooking.is_checked_out && !selectedBooking.is_checked_in"
+                v-if="!props.selectedBooking.is_checked_out && !props.selectedBooking.is_checked_in"
                 label="Check In Guest"
                 icon="pi pi-sign-in"
                 class="p-button-success mr-2"
-                @click="handleCheckIn(selectedBooking.booking_id).then(() => $emit('update'))"
+                @click="handleCheckIn(props.selectedBooking.booking_id).then(() => emits('update'))"
               />
               <Button
-                v-if="!selectedBooking.is_checked_out && selectedBooking.is_checked_in"
+                v-if="props.selectedBooking.payment_status !== 'paid' && !props.selectedBooking.is_checked_out"
+                label="Make Payment"
+                icon="pi pi-money-bill"
+                class="p-button-info mr-2"
+                @click="showPaymentDialog = true"
+              />
+              <Button
+                v-if="!props.selectedBooking.is_checked_out && props.selectedBooking.is_checked_in"
                 label="Check Out Guest"
                 icon="pi pi-sign-out"
                 class="p-button-danger"
-                @click="handleCheckOut(selectedBooking.booking_id).then(() => $emit('update'))"
+                @click="handleCheckOutWithPaymentCheck"
               />
-              <p v-if="selectedBooking.is_checked_out" class="text-600">Already Checked Out</p>
+              <p v-if="props.selectedBooking.is_checked_out" class="text-600">Already Checked Out</p>
             </div>
           </div>
         </template>
@@ -101,40 +187,40 @@ const { handleCheckIn, handleCheckOut } = useBooking();
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Room:</label>
-              <span class="detail-value">{{ selectedBooking.room.name }}</span>
+              <span class="detail-value">{{ props.selectedBooking.room.name }}</span>
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Customer:</label>
-              <span class="detail-value">{{ selectedBooking.user.name }}</span>
+              <span class="detail-value">{{ props.selectedBooking.user.name }}</span>
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Room Capacity:</label>
-              <span class="detail-value">{{ selectedBooking.no_of_guests }} guests</span>
+              <span class="detail-value">{{ props.selectedBooking.no_of_guests }} guests</span>
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Payment Status:</label>
               <Tag
-                :value="selectedBooking.payment_status"
-                :severity="selectedBooking.payment_status === 'paid' ? 'success' : 'warning'"
+                :value="props.selectedBooking.payment_status"
+                :severity="props.selectedBooking.payment_status === 'paid' ? 'success' : 'warning'"
               />
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Check-In Time:</label>
-              <span class="detail-value">{{ formatDateTime(selectedBooking.check_in_date) }}</span>
+              <span class="detail-value">{{ formatDateTime(props.selectedBooking.check_in_date) }}</span>
             </div>
           </div>
           <div class="col-12 md:col-6">
             <div class="detail-item">
               <label class="detail-label">Check-Out Time:</label>
-              <span class="detail-value">{{ formatDateTime(selectedBooking.check_out_date) }}</span>
+              <span class="detail-value">{{ formatDateTime(props.selectedBooking.check_out_date) }}</span>
             </div>
           </div>
         </div>
@@ -149,8 +235,59 @@ const { handleCheckIn, handleCheckOut } = useBooking();
         label="Close"
         icon="pi pi-times"
         text
-        @click="$emit('update:visible', false)"
+        @click="emits('update:visible', false)"
       />
+    </template>
+  </Dialog>
+
+  <!-- Payment Dialog -->
+  <Dialog
+    :visible="showPaymentDialog"
+    header="Complete Payment"
+    :modal="true"
+    :style="{ width: '30vw' }"
+    @update:visible="showPaymentDialog = $event"
+  >
+    <div class="payment-dialog-content">
+      <div class="mb-4">
+        <p class="text-600 mb-3">
+          Complete payment for this booking. Please select a payment method:
+        </p>
+        <div class="mb-3 p-3 surface-100 border-round">
+          <div class="flex justify-content-between align-items-center">
+            <span class="font-semibold">Total Amount:</span>
+            <span class="text-xl font-bold text-primary">{{ formatCurrency(props.selectedBooking?.total_amount || 0) }}</span>
+          </div>
+        </div>
+        <div class="flex flex-column gap-3">
+          <label for="payment-method" class="font-semibold">Payment Method</label>
+          <Dropdown
+            id="payment-method"
+            v-model="selectedPaymentMethod"
+            :options="paymentMethods"
+            option-label="label"
+            option-value="value"
+            placeholder="Select payment method"
+            class="w-full"
+          />
+        </div>
+      </div>
+    </div>
+    <template #footer>
+      <div class="flex gap-2">
+        <Button
+          label="Cancel"
+          icon="pi pi-times"
+          text
+          @click="showPaymentDialog = false; selectedPaymentMethod = ''"
+        />
+        <Button
+          label="Complete Payment"
+          icon="pi pi-check"
+          :disabled="!selectedPaymentMethod"
+          @click="handleCompletePayment"
+        />
+      </div>
     </template>
   </Dialog>
 </template>
