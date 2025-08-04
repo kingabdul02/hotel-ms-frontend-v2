@@ -1,27 +1,25 @@
-<template>
-    <div>
-        <div class="loading-container">
-            <ProgressSpinner />
-            <div class="loading-text xl:text-5xl lg:text-5xl md:text-5xl text-4xl text-with-shadow">{{ text }}
-            </div>
-        </div>
-        <div class="overlay"></div>
-    </div>
-</template>
 <script>
 export default {
     props: {
         text: {
             required: false,
             type: String,
-            default: 'Loading . . .',
-        },
-    },
+            default: 'Loading . . .'
+        }
+    }
 };
 </script>
+<template>
+    <div>
+        <div class="loading-container">
+            <ProgressSpinner />
+            <div class="loading-text xl:text-5xl lg:text-5xl md:text-5xl text-4xl text-with-shadow">{{ text }}</div>
+        </div>
+        <div class="overlay"></div>
+    </div>
+</template>
 
 <style scoped>
-
 .loading-container {
     position: fixed;
     top: 50%;

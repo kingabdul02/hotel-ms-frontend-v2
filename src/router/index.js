@@ -4,10 +4,7 @@ import BookingLayout from '@/layout/booking/BookingLayout.vue';
 
 import DashboardLandingLayout from '@/layout/dashboard-landing/DashboardLandingLayout.vue';
 import store from '../store/store';
-import { 
-    IS_USER_AUTHENTICATE_GETTER,
-    GET_USER_DATA_GETTER
- } from '../store/storeconstants';
+import { IS_USER_AUTHENTICATE_GETTER, GET_USER_DATA_GETTER } from '../store/storeconstants';
 
 const routes = [
     {
@@ -38,13 +35,13 @@ const routes = [
                         path: '/settings/dashboard',
                         name: 'settingsdashboard',
                         component: () => import('@/views/SettingsDashboard.vue'),
-                        meta: { auth: true },
+                        meta: { auth: true }
                     },
                     {
                         path: '/settings/profile',
                         name: 'settingsprofile',
                         component: () => import('@/views/SettingsProfile.vue'),
-                        meta: { auth: true },
+                        meta: { auth: true }
                     },
                     {
                         path: '/settings/manage/hotels',
@@ -93,7 +90,7 @@ const routes = [
                         name: 'managehalls',
                         component: () => import('@/views/pages/settings/ManageHalls.vue'),
                         meta: { auth: true }
-                    },
+                    }
                 ]
             },
             {
@@ -107,7 +104,7 @@ const routes = [
                 name: 'CorporateBill',
                 component: () => import('@/components/BookingManagement/CorporateBill.vue'),
                 meta: { auth: true }
-              },
+            },
             {
                 path: '/admin/booking/manage/listings',
                 name: 'managelistings',
@@ -313,9 +310,8 @@ const routes = [
                         path: '/booking/rooms/details/:id/payment/:booking_id',
                         name: 'roomdetailspayreservation',
                         component: () => import('@/views/pages/booking/RoomDetailsPayResavation.vue')
-                    },
-                ],
-
+                    }
+                ]
             },
             {
                 path: '/booking/offers',
@@ -346,10 +342,9 @@ const routes = [
                         name: 'useraccountbookingdetails',
                         component: () => import('@/views/pages/booking/UserAccountBookingDetails.vue'),
                         meta: { auth: true }
-                    },
-                ],
-
-            },
+                    }
+                ]
+            }
         ]
     },
     {
@@ -413,7 +408,7 @@ const router = createRouter({
     routes,
     scrollBehavior(to, from, savedPosition) {
         // Always scroll to the top
-        return { top: 0 }
+        return { top: 0 };
     }
 });
 
@@ -460,8 +455,5 @@ router.beforeEach((to, from, next) => {
         next();
     }
 });
-
-
-
 
 export default router;

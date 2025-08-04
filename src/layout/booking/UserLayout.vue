@@ -56,6 +56,30 @@ const isOutsideClicked = (event) => {
 };
 </script>
 
+<script>
+export default {
+    name: 'App',
+    mounted() {
+        this.scrollToTopWithAnimation();
+    },
+    methods: {
+        scrollToTopWithAnimation() {
+            // Scroll to the top of the page with animation
+            const scrollDuration = 500; // Duration of the scroll animation in milliseconds
+            const scrollStep = -window.scrollY / (scrollDuration / 15); // 15 milliseconds per step
+
+            const scrollInterval = setInterval(() => {
+                if (window.scrollY !== 0) {
+                    window.scrollBy(0, scrollStep);
+                } else {
+                    clearInterval(scrollInterval);
+                }
+            }, 15);
+        }
+    }
+};
+</script>
+
 <template>
     <div id="app" class="layout-wrapper" :class="containerClass">
         <UserTopbar></UserTopbar>
@@ -90,27 +114,3 @@ const isOutsideClicked = (event) => {
     animation: scrollAnimation 0.5s ease;
 }
 </style>
-
-<script>
-export default {
-    name: 'App',
-    mounted() {
-        this.scrollToTopWithAnimation();
-    },
-    methods: {
-        scrollToTopWithAnimation() {
-            // Scroll to the top of the page with animation
-            const scrollDuration = 500; // Duration of the scroll animation in milliseconds
-            const scrollStep = -window.scrollY / (scrollDuration / 15); // 15 milliseconds per step
-
-            const scrollInterval = setInterval(() => {
-                if (window.scrollY !== 0) {
-                    window.scrollBy(0, scrollStep);
-                } else {
-                    clearInterval(scrollInterval);
-                }
-            }, 15);
-        }
-    }
-};
-</script>

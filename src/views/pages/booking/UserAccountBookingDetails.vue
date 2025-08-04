@@ -1,16 +1,12 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '@/service/AxiosInstance';
 import { formatDateTime } from '@/utils/dateTimeFormatter';
 
-import {
-    LOADING_SPINNER_SHOW_MUTATION,
-    GET_USER_DATA_GETTER,
-} from '@/store/storeconstants';
-
+import { LOADING_SPINNER_SHOW_MUTATION, GET_USER_DATA_GETTER } from '@/store/storeconstants';
 
 const route = useRoute();
 const router = useRouter();
@@ -37,9 +33,9 @@ const fetchBookingDetails = async () => {
     try {
         const response = await axiosInstance.get(`/guest/get-booking/${route.params.booking_id}`, {
             headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
         });
         bookingDetails.value = response.data.data;
         bookingID.value = response?.data?.data?.booking_id;
@@ -76,19 +72,15 @@ const mapUrl = 'https://maps.app.goo.gl/GPR2N7yV7j1pM2FJ6';
                         <img src="/img/logo-nbte-2.png" height="50" alt="logo" />
                         <h3 class="font-bold m-0">NBTE Consult Limited</h3>
                     </div>
-                    <div class="text-900 font-bold text-3xl text-center p-3 mb-4 bg-green-100 border-round">
-                        <span class="text-primary">Booking ID:</span> {{ bookingDetails?.booking_id }}
-                    </div>
+                    <div class="text-900 font-bold text-3xl text-center p-3 mb-4 bg-green-100 border-round"><span class="text-primary">Booking ID:</span> {{ bookingDetails?.booking_id }}</div>
                     <div class="grid px-2">
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Room name:</div>
-                            <div class="black-font text-1xl">{{ bookingDetails?.room?.name }}
-                            </div>
+                            <div class="black-font text-1xl">{{ bookingDetails?.room?.name }}</div>
                         </div>
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Room type:</div>
-                            <div class="black-font text-1xl">{{ bookingDetails?.room?.roomType?.name }}
-                            </div>
+                            <div class="black-font text-1xl">{{ bookingDetails?.room?.roomType?.name }}</div>
                         </div>
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Guest(s):</div>
@@ -103,7 +95,8 @@ const mapUrl = 'https://maps.app.goo.gl/GPR2N7yV7j1pM2FJ6';
                         </div>
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Check in Date:</div>
-                            <div class="black-font text-1xl"><span class="font-bold text-2xl">
+                            <div class="black-font text-1xl">
+                                <span class="font-bold text-2xl">
                                     <i class="pi pi-clock text-green-500 mr-2"></i>
                                 </span>
                                 <span>
@@ -124,24 +117,20 @@ const mapUrl = 'https://maps.app.goo.gl/GPR2N7yV7j1pM2FJ6';
                         </div>
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Payment status:</div>
-                            <div style="height: 20px;" class="text-600">
-                                <Tag v-if="bookingDetails?.payment_status !== 'pending'" severity="success" class="px-3"
-                                    value="Paid"></Tag>
-                                <Tag v-if="bookingDetails?.payment_status === 'pending'" severity="danger" class="px-3"
-                                    value="Pending"></Tag>
+                            <div style="height: 20px" class="text-600">
+                                <Tag v-if="bookingDetails?.payment_status !== 'pending'" severity="success" class="px-3" value="Paid"></Tag>
+                                <Tag v-if="bookingDetails?.payment_status === 'pending'" severity="danger" class="px-3" value="Pending"></Tag>
                             </div>
                         </div>
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Payment amount:</div>
-                            <div style="height: 20px;" class="text-600">
-                                <span class="font-medium text-600">
-                                    ₦ {{ bookingDetails?.paymentEntry?.payment_amount }}
-                                </span>
+                            <div style="height: 20px" class="text-600">
+                                <span class="font-medium text-600"> ₦ {{ bookingDetails?.paymentEntry?.payment_amount }} </span>
                             </div>
                         </div>
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Payed on:</div>
-                            <div style="height: 20px;" class="text-600">
+                            <div style="height: 20px" class="text-600">
                                 <span class="font-medium text-600">
                                     {{ formatDateTime(bookingDetails?.paymentEntry.payment_date) }}
                                 </span>
@@ -149,33 +138,25 @@ const mapUrl = 'https://maps.app.goo.gl/GPR2N7yV7j1pM2FJ6';
                         </div>
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Special Requests:</div>
-                            <div class="black-font text-1xl">{{ bookingDetails?.special_requests }}
-                            </div>
+                            <div class="black-font text-1xl">{{ bookingDetails?.special_requests }}</div>
                         </div>
                         <div class="col-12 lg:col-4 md:col-4 xl:col-4">
                             <div class="text-900 font-bold text-1xl mb-2">Cancellation Request:</div>
-                            <div class="black-font text-1xl">{{ bookingDetails?.cancelationRequest ??
-                                "Not set" }}</div>
+                            <div class="black-font text-1xl">{{ bookingDetails?.cancelationRequest ?? 'Not set' }}</div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-12 md:col-3 hide-on-print">
                 <div class="surface-section p-5 text-center shadow-1 border-round">
-                    <Button style="width: 250px;" label="Print Receipt"
-                        class="font-bold p-3 w-full p-button-sm rubik-font mb-3 p-button-info" icon="pi pi-print"
-                        iconPos="right" @click="printPage" />
+                    <Button style="width: 250px" label="Print Receipt" class="font-bold p-3 w-full p-button-sm rubik-font mb-3 p-button-info" icon="pi pi-print" iconPos="right" @click="printPage" />
                     <router-link to="/booking/user/account">
-                        <Button style="width: 250px;" label="Back to Booking List"
-                            class="font-bold p-3 w-full p-button-sm p-button-danger p-button-outlined rubik-font"
-                            icon="pi pi-arrow-left" iconPos="left" />
+                        <Button style="width: 250px" label="Back to Booking List" class="font-bold p-3 w-full p-button-sm p-button-danger p-button-outlined rubik-font" icon="pi pi-arrow-left" iconPos="left" />
                     </router-link>
                 </div>
             </div>
         </div>
     </div>
 </template>
-
-
 
 <style scoped></style>

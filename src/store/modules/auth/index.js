@@ -14,10 +14,10 @@ export default {
             role: '',
             refreshToken: '',
             expiresIn: 'sdsds',
-            autoLogout: false,
+            autoLogout: false
         };
     },
     mutations,
     getters,
-    actions,
+    actions
 };

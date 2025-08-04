@@ -15,7 +15,7 @@ const roomTypes = ref([]);
 const guests = ref([
     { name: '1 room - 1 guest', code: '1RM' },
     { name: '1 room - 2 guests', code: '2RM' },
-    { name: '2 room - 5 guests', code: '5RM' },
+    { name: '2 room - 5 guests', code: '5RM' }
 ]);
 
 const fetchRoomTypes = async () => {
@@ -53,11 +53,11 @@ const load = () => {
 
     if (selectedGuests.value) {
         if (selectedGuests.value.code === '1RM') {
-            params.no_of_guests =  1;
+            params.no_of_guests = 1;
         } else if (selectedGuests.value.code === '2RM') {
-            params.no_of_guests =  2;
+            params.no_of_guests = 2;
         } else {
-            params.no_of_guests =  5;
+            params.no_of_guests = 5;
         }
     }
 
@@ -70,18 +70,19 @@ const isUserRoute = computed(() => router.currentRoute.value.path.includes('/boo
 
 <template>
     <div v-if="!isUserRoute">
-        <div class="col-12 pt-8 p-0"
-            style="background-image: url('/img/building/nbte-16.jpeg'); height: 500px; background-size: cover; background-position: center; background-repeat: no-repeat;">
+        <div class="col-12 pt-8 p-0" style="background-image: url('/img/building/nbte-16.jpeg'); height: 500px; background-size: cover; background-position: center; background-repeat: no-repeat">
             <div class="overlay-4 overlay-3 pt-8">
                 <div class="px-4 py-8 md:px-6 lg:px-8">
                     <div class="text-700 text-center">
-                        <div class="text-white font-bold md:text-7xl lg:text-7xl text-4xl text-with-shadow">Discover
-                            Extraordinary <br> Comfort in Hotels</div>
+                        <div class="text-white font-bold md:text-7xl lg:text-7xl text-4xl text-with-shadow">
+                            Discover Extraordinary <br />
+                            Comfort in Hotels
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div style="margin-top: -60px !important;" class="grid m-0">
+        <div style="margin-top: -60px !important" class="grid m-0">
             <div class="col-12 md:col-2 lg:col-2"></div>
             <div class="col-12 md:col-8 lg:col-8 px-5 md:px-0 lg:px-0">
                 <div class="card shadow-1 pb-3">
@@ -96,12 +97,10 @@ const isUserRoute = computed(() => router.currentRoute.value.path.includes('/boo
                             <Calendar v-model="date.checkOut" placeholder="Check out" class="w-full" showButtonBar />
                         </div>
                         <div class="col-12 md:col-3 lg:col-3">
-                            <Dropdown v-model="selectedGuests" :options="guests" optionLabel="name" placeholder="Guests"
-                                checkmark :highlightOnSelect="false" class="w-full" />
+                            <Dropdown v-model="selectedGuests" :options="guests" optionLabel="name" placeholder="Guests" checkmark :highlightOnSelect="false" class="w-full" />
                         </div>
                         <div class="col-12 md:col-2 lg:col-2">
-                            <Button type="button" label="Search" class="w-full" icon="pi pi-search" :loading="loading"
-                                @click="load()" />
+                            <Button type="button" label="Search" class="w-full" icon="pi pi-search" :loading="loading" @click="load()" />
                         </div>
                     </div>
                 </div>

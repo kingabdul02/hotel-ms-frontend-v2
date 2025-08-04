@@ -1,36 +1,9 @@
-<template>
-    <div class="layout-topbar">
-        <router-link to="/" class="layout-topbar-logo">
-            <img :src="logoUrl" alt="logo" />
-            <span class="font-bold">NBTE Consult Limited</span>
-        </router-link>
-
-        <button class="p-link layout-topbar-menu-button layout-topbar-button" @click="onTopBarMenuButton()">
-            <i class="pi pi-ellipsis-v"></i>
-        </button>
-
-        <div class="layout-topbar-menu" :class="topbarMenuClasses">
-            <div v-if="isAuthenticated">
-                <Chip @click="toggle" icon="pi pi-user"
-                    class="montserrat-font xl:mt-0 lg:mt-0 md:mt-0 mt-4 surface-border border-3 c-shadow cursor-pointer"
-                    :label="userEmail" />
-                <Button @click="toggle" icon="pi pi-chevron-down" severity="secondary" class="pt-3 ml-1" text rounded aria-label="Favorite" />
-                <Menu class="montserrat-font mt-2" ref="menu" id="overlay_menu" :model="items" :popup="true" />
-            </div>
-        </div>
-    </div>
-</template>
-
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useLayout } from '@/layout/composables/layout';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-import {
-    LOGOUT_ACTION,
-    IS_USER_AUTHENTICATE_GETTER,
-    GET_USER_DATA_GETTER,
-} from '../../store/storeconstants';
+import { LOGOUT_ACTION, IS_USER_AUTHENTICATE_GETTER, GET_USER_DATA_GETTER } from '../../store/storeconstants';
 
 const { layoutConfig, onMenuToggle } = useLayout();
 const router = useRouter();
@@ -130,3 +103,24 @@ const goToProfile = () => {
     router.push('/profile'); // Adjust the path to your profile page
 };
 </script>
+
+<template>
+    <div class="layout-topbar">
+        <router-link to="/" class="layout-topbar-logo">
+            <img :src="logoUrl" alt="logo" />
+            <span class="font-bold">NBTE Consult Limited</span>
+        </router-link>
+
+        <button class="p-link layout-topbar-menu-button layout-topbar-button" @click="onTopBarMenuButton()">
+            <i class="pi pi-ellipsis-v"></i>
+        </button>
+
+        <div class="layout-topbar-menu" :class="topbarMenuClasses">
+            <div v-if="isAuthenticated">
+                <Chip @click="toggle" icon="pi pi-user" class="montserrat-font xl:mt-0 lg:mt-0 md:mt-0 mt-4 surface-border border-3 c-shadow cursor-pointer" :label="userEmail" />
+                <Button @click="toggle" icon="pi pi-chevron-down" severity="secondary" class="pt-3 ml-1" text rounded aria-label="Favorite" />
+                <Menu class="montserrat-font mt-2" ref="menu" id="overlay_menu" :model="items" :popup="true" />
+            </div>
+        </div>
+    </div>
+</template>

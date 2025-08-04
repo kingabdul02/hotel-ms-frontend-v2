@@ -1,5 +1,4 @@
-<script setup>
-</script>
+<script setup></script>
 
 <template>
     <div class="">
@@ -11,8 +10,7 @@
                             <span class="block text-500 font-medium mb-3">Total Bookings</span>
                             <div class="text-900 font-medium text-xl">320</div>
                         </div>
-                        <div class="flex align-items-center justify-content-center bg-blue-100 border-round"
-                            style="width:2.5rem;height:2.5rem">
+                        <div class="flex align-items-center justify-content-center bg-blue-100 border-round" style="width: 2.5rem; height: 2.5rem">
                             <i class="pi pi-calendar text-blue-500 text-xl"></i>
                         </div>
                     </div>
@@ -27,8 +25,7 @@
                             <span class="block text-500 font-medium mb-3">Available Inventory</span>
                             <div class="text-900 font-medium text-xl">1500 items</div>
                         </div>
-                        <div class="flex align-items-center justify-content-center bg-orange-100 border-round"
-                            style="width:2.5rem;height:2.5rem">
+                        <div class="flex align-items-center justify-content-center bg-orange-100 border-round" style="width: 2.5rem; height: 2.5rem">
                             <i class="pi pi-box text-orange-500 text-xl"></i>
                         </div>
                     </div>
@@ -43,8 +40,7 @@
                             <span class="block text-500 font-medium mb-3">User Accounts</span>
                             <div class="text-900 font-medium text-xl">450</div>
                         </div>
-                        <div class="flex align-items-center justify-content-center bg-cyan-100 border-round"
-                            style="width:2.5rem;height:2.5rem">
+                        <div class="flex align-items-center justify-content-center bg-cyan-100 border-round" style="width: 2.5rem; height: 2.5rem">
                             <i class="pi pi-users text-cyan-500 text-xl"></i>
                         </div>
                     </div>
@@ -59,8 +55,7 @@
                             <span class="block text-500 font-medium mb-3">System Alerts</span>
                             <div class="text-900 font-medium text-xl">5</div>
                         </div>
-                        <div class="flex align-items-center justify-content-center bg-purple-100 border-round"
-                            style="width:2.5rem;height:2.5rem">
+                        <div class="flex align-items-center justify-content-center bg-purple-100 border-round" style="width: 2.5rem; height: 2.5rem">
                             <i class="pi pi-bell text-purple-500 text-xl"></i>
                         </div>
                     </div>

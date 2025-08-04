@@ -1,4 +1,23 @@
-<script setup>
+<script setup></script>
+
+<script>
+import TheLoader from './components/TheLoader.vue';
+import { mapState } from 'vuex';
+import { AUTO_LOGIN_ACTION } from './store/storeconstants';
+export default {
+    name: 'App',
+    computed: {
+        ...mapState({
+            showLoading: (state) => state.showLoading
+        })
+    },
+    components: {
+        TheLoader
+    },
+    created() {
+        this.$store.dispatch(`auth/${AUTO_LOGIN_ACTION}`);
+    }
+};
 </script>
 
 <template>
@@ -36,23 +55,3 @@
     /* Ensure the overlay is above other content */
 }
 </style>
-
-<script>
-import TheLoader from './components/TheLoader.vue';
-import { mapState } from 'vuex';
-import { AUTO_LOGIN_ACTION } from './store/storeconstants';
-export default {
-    name: 'App',
-    computed: {
-        ...mapState({
-            showLoading: (state) => state.showLoading,
-        }),
-    },
-    components: {
-        TheLoader,
-    },
-    created() {
-        this.$store.dispatch(`auth/${AUTO_LOGIN_ACTION}`);
-    },
-};
-</script>

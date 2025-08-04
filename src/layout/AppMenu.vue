@@ -5,11 +5,8 @@ import AppMenuItem from './AppMenuItem.vue';
 import { useRoute, useRouter } from 'vue-router'; // Import useRoute for accessing the current route
 import { useLayout } from '@/layout/composables/layout';
 import { useStore } from 'vuex';
-import {
-    LOGOUT_ACTION,
-    IS_USER_AUTHENTICATE_GETTER,
-} from '@/store/storeconstants';
-import { useToast } from "primevue/usetoast";
+import { LOGOUT_ACTION, IS_USER_AUTHENTICATE_GETTER } from '@/store/storeconstants';
+import { useToast } from 'primevue/usetoast';
 
 const router = useRouter();
 const store = useStore();
@@ -41,19 +38,19 @@ const model = ref([
                 label: 'Dashboard',
                 icon: 'pi pi-fw pi-home',
                 to: '/inventory/dashboard',
-                visible: route.path.includes('/inventory'), // Check for '/inventory' in the path
+                visible: route.path.includes('/inventory') // Check for '/inventory' in the path
             },
             {
                 label: 'Inventory',
                 icon: 'pi pi-fw pi-shopping-cart',
                 to: '/inventory/management/inventory',
-                visible: route.path.includes('/inventory'), // Check for '/inventory' in the path
+                visible: route.path.includes('/inventory') // Check for '/inventory' in the path
             },
             {
                 label: 'Reports',
                 icon: 'pi pi-fw pi-chart-bar',
                 to: '/inventory/management/reports',
-                visible: route.path.includes('/inventory'), // Check for '/inventory' in the path
+                visible: route.path.includes('/inventory') // Check for '/inventory' in the path
             },
             // {
             //     label: 'Suppliers',
@@ -72,32 +69,32 @@ const model = ref([
                 label: 'Dashboard',
                 icon: 'pi pi-fw pi-home',
                 to: '/admin/booking/dashboard',
-                visible: route.path.includes('/booking'), // Check for '/booking' in the path
+                visible: route.path.includes('/booking') // Check for '/booking' in the path
             },
             {
                 label: 'Bookings',
                 icon: 'pi pi-fw pi-list',
                 to: '/admin/booking/management',
-                visible: route.path.includes('/booking'), // Check for '/booking' in the path
+                visible: route.path.includes('/booking') // Check for '/booking' in the path
             },
             {
                 label: 'Listings',
                 icon: 'pi pi-fw pi-sort-amount-up',
                 to: '/admin/booking/manage/listings',
-                visible: route.path.includes('/booking'), // Check for '/booking' in the path
+                visible: route.path.includes('/booking') // Check for '/booking' in the path
             },
             {
                 label: 'Notifications',
                 icon: 'pi pi-fw pi-bell',
                 to: '/admin/bookings/notifications',
-                visible: route.path.includes('/booking'), // Check for '/booking' in the path
+                visible: route.path.includes('/booking') // Check for '/booking' in the path
             },
             //Settings Menus
             {
                 label: 'Dashboard',
                 icon: 'pi pi-fw pi-home',
                 to: '/settings/dashboard',
-                visible: route.path.includes('/settings'), // Check for '/booking' in the path
+                visible: route.path.includes('/settings') // Check for '/booking' in the path
             },
             // {
             //     label: 'Hotels',
@@ -106,61 +103,63 @@ const model = ref([
             //     visible: route.path.includes('/settings'), // Check for '/booking' in the path
             // },
             {
-                label: 'Room Management', icon: 'pi pi-fw pi-building',
+                label: 'Room Management',
+                icon: 'pi pi-fw pi-building',
                 visible: route.path.includes('/settings'),
                 items: [
                     {
                         label: 'Rooms',
                         icon: 'pi pi-building',
                         to: '/settings/manage/rooms',
-                        visible: route.path.includes('/settings'), // Check for '/booking' in the path
+                        visible: route.path.includes('/settings') // Check for '/booking' in the path
                     },
                     {
                         label: 'Types',
                         icon: 'pi pi-sitemap',
                         to: '/settings/manage/room-types',
-                        visible: route.path.includes('/settings'), // Check for '/booking' in the path
+                        visible: route.path.includes('/settings') // Check for '/booking' in the path
                     },
                     {
                         label: 'Halls',
                         icon: 'pi pi-th-large',
                         to: '/settings/manage/halls',
-                        visible: route.path.includes('/settings'), // Check for '/booking' in the path
-                    },
+                        visible: route.path.includes('/settings') // Check for '/booking' in the path
+                    }
                 ]
             },
             {
-                label: 'Inventory', icon: 'pi pi-shopping-bag',
+                label: 'Inventory',
+                icon: 'pi pi-shopping-bag',
                 visible: route.path.includes('/settings'),
                 items: [
                     {
                         label: 'Items',
                         icon: 'pi pi-sitemap',
                         to: '/settings/manage/items/items',
-                        visible: route.path.includes('/settings'), // Check for '/booking' in the path
+                        visible: route.path.includes('/settings') // Check for '/booking' in the path
                     },
                     {
                         label: 'Item Category',
                         icon: 'pi pi-sitemap',
                         to: '/settings/manage/items/category',
-                        visible: route.path.includes('/settings'), // Check for '/booking' in the path
+                        visible: route.path.includes('/settings') // Check for '/booking' in the path
                     },
                     {
                         label: 'Suppliers',
                         icon: 'pi pi-truck',
                         to: '/settings/manage/suppliers',
-                        visible: route.path.includes('/settings'), // Check for '/booking' in the path
-                    },
+                        visible: route.path.includes('/settings') // Check for '/booking' in the path
+                    }
                 ] // Check for '/booking' in the path
             },
             {
                 label: 'Manage Users',
                 icon: 'pi pi-users',
                 to: '/settings/manage/users',
-                visible: route.path.includes('/settings'), // Check for '/booking' in the path
-            },
+                visible: route.path.includes('/settings') // Check for '/booking' in the path
+            }
         ]
-    },
+    }
     // {
     //     label: 'UI Components',
     //     items: [
@@ -331,20 +330,20 @@ const model2 = ref([
                 icon: 'pi pi-bars',
                 command: () => {
                     onMenuToggle();
-                },
+                }
             },
             {
                 label: 'Exit Module',
                 icon: 'pi pi-directions-alt',
-                to: '/dashboard/landing',
-            },
+                to: '/dashboard/landing'
+            }
             // {
             //     label: 'Settings',
             //     icon: 'pi pi-fw pi-cog',
             //     to: '/settings/profile',
             // }
         ]
-    },
+    }
 ]);
 
 const model3 = ref([
@@ -358,9 +357,9 @@ const model3 = ref([
                     performLogout();
                 },
                 visible: isAuthenticated
-            },
+            }
         ]
-    },
+    }
 ]);
 </script>
 
@@ -388,7 +387,6 @@ const model3 = ref([
             <li v-if="item.separator" class="menu-separator"></li>
         </template>
     </ul>
-
 </template>
 
 <style scoped>

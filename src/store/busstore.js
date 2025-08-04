@@ -2,7 +2,7 @@ import { createStore } from 'vuex';
 
 export default createStore({
     state: {
-        isModalVisible: false,
+        isModalVisible: false
     },
     mutations: {
         showModal(state) {
@@ -10,6 +10,6 @@ export default createStore({
         },
         hideModal(state) {
             state.isModalVisible = false;
-        },
-    },
+        }
+    }
 });

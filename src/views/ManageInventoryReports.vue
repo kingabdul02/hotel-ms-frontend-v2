@@ -20,8 +20,8 @@ const statisticsInventory = async () => {
     try {
         const response = await axiosInstance.get('/admin/statistics/inventory', {
             headers: {
-                Authorization: `Bearer ${token}`,
-            },
+                Authorization: `Bearer ${token}`
+            }
         });
 
         statisticsInventoryResponse.value = response.data;
@@ -38,9 +38,9 @@ const statisticsInventory = async () => {
 };
 
 const updateLineData = (statistics) => {
-    const labels = statistics.map(stat => stat.category_name);
-    const data = statistics.map(stat => stat.total_quantity);
-    const colors = statistics.map(stat => stat.chart_color);
+    const labels = statistics.map((stat) => stat.category_name);
+    const data = statistics.map((stat) => stat.total_quantity);
+    const colors = statistics.map((stat) => stat.chart_color);
 
     lineData.labels = labels;
     lineData.datasets = statistics.map((stat, index) => ({

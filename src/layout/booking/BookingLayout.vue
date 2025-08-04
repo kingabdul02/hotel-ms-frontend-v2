@@ -56,6 +56,8 @@ const isOutsideClicked = (event) => {
 };
 </script>
 
+<script></script>
+
 <template>
     <div class="layout-wrapper" :class="containerClass">
         <div class="hide-on-print">
@@ -73,14 +75,10 @@ const isOutsideClicked = (event) => {
         <div class="hide-on-print">
             <booking-footer></booking-footer>
         </div>
-        
+
         <div class="layout-mask"></div>
     </div>
     <Toast />
 </template>
 
-<style lang="scss" scoped>
-</style>
-
-<script>
-</script>
+<style lang="scss" scoped></style>

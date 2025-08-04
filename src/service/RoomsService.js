@@ -11,23 +11,23 @@ export class RoomsService {
     }
 
     async addRoom(room) {
-        console.log("Adding room type:", room);
+        console.log('Adding room type:', room);
         const response = await axiosInstance.post(this.apiBase, room);
-        console.log("Response from addRoom:", response.data);
+        console.log('Response from addRoom:', response.data);
         return response.data;
     }
 
     async updateRoom(id, room) {
         console.log(`Updating room type with id ${id}:`, room);
         const response = await axiosInstance.put(`${this.apiBase}/${id}`, room);
-        console.log("Response from updateRoom:", response.data);
+        console.log('Response from updateRoom:', response.data);
         return response.data;
     }
 
     async deleteRoom(id) {
         console.log(`Deleting room type with id ${id}`);
         const response = await axiosInstance.delete(`${this.apiBase}/${id}`);
-        console.log("Response from deleteRoom:", response.data);
+        console.log('Response from deleteRoom:', response.data);
         return response.data;
     }
 }

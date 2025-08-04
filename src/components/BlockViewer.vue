@@ -36,6 +36,10 @@ async function copyCode(event) {
 }
 </script>
 
+<script>
+export default {};
+</script>
+
 <template>
     <div class="block-section">
         <div class="block-header">
@@ -62,7 +66,6 @@ async function copyCode(event) {
         </div>
     </div>
 </template>
-
 <style scoped lang="scss">
 .block-section {
     margin-bottom: 4rem;
@@ -210,6 +213,3 @@ pre[class*='language-'] {
     }
 }
 </style>
-<script>
-export default {};
-</script>

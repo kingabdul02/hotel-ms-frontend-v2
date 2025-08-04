@@ -3,9 +3,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { mapMutations } from 'vuex';
 import { useStore } from 'vuex';
-import {
-    LOADING_SPINNER_SHOW_MUTATION,
-} from '../../../store/storeconstants';
+import { LOADING_SPINNER_SHOW_MUTATION } from '../../../store/storeconstants';
 import axiosInstance from '@/service/AxiosInstance';
 
 const rooms = ref([]);
@@ -17,18 +15,19 @@ const formatCurrency = (value) => {
 
 // Mapping the mutations
 const { showLoading } = mapMutations({
-    showLoading: LOADING_SPINNER_SHOW_MUTATION,
+    showLoading: LOADING_SPINNER_SHOW_MUTATION
 });
 
 const showLoadingMethod = showLoading.bind({ $store: store });
 
 onMounted(() => {
     showLoadingMethod(true);
-    axiosInstance.get('/rooms')
-        .then(response => {
+    axiosInstance
+        .get('/rooms')
+        .then((response) => {
             rooms.value = response.data.data;
         })
-        .catch(error => {
+        .catch((error) => {
             console.error('Error fetching rooms:', error);
         })
         .finally(() => {
@@ -49,8 +48,7 @@ const navigateToRooms = () => {
 <template>
     <div class="grid p-2 md:p-3 lg:p-3 px-0 m-0">
         <div class="col-12 md:col-4 lg:col-4 p-2 md:p-3 lg:p-3"></div>
-        <div class="text-4xl md:text-6xl lg:text-6xl text-center font-bold col-12 md:col-4 lg:col-4 p-2 md:p-3 lg:p-3">
-            All Rooms</div>
+        <div class="text-4xl md:text-6xl lg:text-6xl text-center font-bold col-12 md:col-4 lg:col-4 p-2 md:p-3 lg:p-3">All Rooms</div>
         <div class="col-12 md:col-4 lg:col-4 text-center md:text-right lg:text-right pt-4">
             <Button icon="pi pi-arrow-left" severity="secondary" class="mr-2" rounded outlined aria-label="Bookmark" />
             <Button icon="pi pi-arrow-right" severity="secondary" rounded outlined aria-label="Bookmark" />
@@ -63,22 +61,26 @@ const navigateToRooms = () => {
                 <!-- <div @click="navigateToRoom(room.id)"
                     style="background-image: url('/img/building/nbte-3.jpeg'); height: 350px; border-radius: 25px; background-size: cover; background-position: center; background-repeat: no-repeat;" 
                     class="card p-0 quick-access-tab"> -->
-                <div @click="navigateToRoom(room.id)" :style="{ backgroundImage: `url(${room?.images?.data[0]?.url})` }" style="height: 350px; border-radius: 25px; background-size: cover; background-position: center; background-repeat: no-repeat;" 
-                    class="card p-0 quick-access-tab">
+                <div
+                    @click="navigateToRoom(room.id)"
+                    :style="{ backgroundImage: `url(${room?.images?.data[0]?.url})` }"
+                    style="height: 350px; border-radius: 25px; background-size: cover; background-position: center; background-repeat: no-repeat"
+                    class="card p-0 quick-access-tab"
+                >
                     <div class="card__overlay">
                         <h2 class="text-left font-bold text-white">
                             <span v-if="room.is_available" class="mr-2">
-                                <Tag style="background: #6B77E5; color: var(--surface-0); border-radius: 25px; padding: 5px 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24) !important;">
+                                <Tag style="background: #6b77e5; color: var(--surface-0); border-radius: 25px; padding: 5px 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24) !important">
                                     <span class="uppercase montserrat-font">Available</span>
                                 </Tag>
                             </span>
                             <span v-if="room.is_feature" class="mr-2">
-                                <Tag style="background: #ffffff; color: #000000; border-radius: 25px; padding: 5px 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24) !important;">
+                                <Tag style="background: #ffffff; color: #000000; border-radius: 25px; padding: 5px 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24) !important">
                                     <span class="uppercase montserrat-font">Featured</span>
                                 </Tag>
                             </span>
                             <span v-if="!room.is_available" class="mr-2">
-                                <Tag style="background: #FEBB02; color: #ffffff; border-radius: 25px; padding: 5px 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24) !important;">
+                                <Tag style="background: #febb02; color: #ffffff; border-radius: 25px; padding: 5px 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24) !important">
                                     <span class="uppercase montserrat-font">Booked</span>
                                 </Tag>
                             </span>
@@ -93,9 +95,9 @@ const navigateToRooms = () => {
                                 </div>
                             </div>
                             <span class="text-red-500 text-sm font-bold mr-3">{{ formatCurrency(room.price) }}</span>
-                            <img style="margin-bottom: -4px !important;" src="/img/icons8-bed-50.png" alt="Bed Icon" height="20" class="img-fluid img-fit mr-3">
+                            <img style="margin-bottom: -4px !important" src="/img/icons8-bed-50.png" alt="Bed Icon" height="20" class="img-fluid img-fit mr-3" />
                             <span class="text-400 mr-3">|</span>
-                            <img style="margin-bottom: -3px !important;" src="/img/icons8-bath-50.png" alt="Bath Icon" height="20" class="img-fluid img-fit mr-3">
+                            <img style="margin-bottom: -3px !important" src="/img/icons8-bath-50.png" alt="Bath Icon" height="20" class="img-fluid img-fit mr-3" />
                             <span class="text-400 mr-3">|</span>
                             <span class="text-900">
                                 <i class="pi pi-clone text-xl mr-2"></i>
@@ -109,5 +111,4 @@ const navigateToRooms = () => {
     </div>
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>

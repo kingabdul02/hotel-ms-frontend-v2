@@ -25,8 +25,8 @@ const statisticsInventory = async () => {
     try {
         const response = await axiosInstance.get('/admin/statistics/inventory', {
             headers: {
-                Authorization: `Bearer ${token}`,
-            },
+                Authorization: `Bearer ${token}`
+            }
         });
         statisticsInventoryResponse.value = response.data;
         totalProducts.value = statisticsInventoryResponse.value.totalProducts;
@@ -47,9 +47,9 @@ const statisticsInventory = async () => {
 };
 
 const updateLineData = (statistics) => {
-    const labels = statistics.map(stat => stat.category_name);
-    const data = statistics.map(stat => stat.total_quantity);
-    const colors = statistics.map(stat => stat.chart_color);
+    const labels = statistics.map((stat) => stat.category_name);
+    const data = statistics.map((stat) => stat.total_quantity);
+    const colors = statistics.map((stat) => stat.chart_color);
 
     lineData.labels = labels;
     lineData.datasets = statistics.map((stat, index) => ({
@@ -174,7 +174,7 @@ onMounted(() => {
                             <div class="flex justify-content-between mb-3">
                                 <div>
                                     <span class="block text-yellow-500 font-bold mb-3">Total Products</span>
-                                    <div class="text-500 font-bold text-xl">{{totalProducts}}</div>
+                                    <div class="text-500 font-bold text-xl">{{ totalProducts }}</div>
                                 </div>
                             </div>
                             <span class="text-500">Last 7 days</span>
@@ -196,7 +196,7 @@ onMounted(() => {
                             <div class="flex justify-content-between mb-3">
                                 <div>
                                     <span class="block text-red-500 font-bold mb-3">Low Stocks</span>
-                                    <div class="text-500 font-bold text-xl"> {{ lowStockItems.length }}</div>
+                                    <div class="text-500 font-bold text-xl">{{ lowStockItems.length }}</div>
                                 </div>
                             </div>
                             <span class="text-500">Not in stock</span>
@@ -206,7 +206,7 @@ onMounted(() => {
             </div>
         </div>
         <div class="col-12 xl:col-5 md:col-5 lg:col-5">
-            <div class="card h-full shadow-1" >
+            <div class="card h-full shadow-1">
                 <div class="grid">
                     <div class="col-8">
                         <h5 class="font-bold text-600 w-full md:w-9">Low Quantity Stock</h5>
@@ -218,17 +218,13 @@ onMounted(() => {
 
                 <div v-for="item in lowStockItems" :key="item.name">
                     <div class="flex align-items-center gap-4 mb-4">
-                        <div style="background-image: url('/img/building/nbte-21.jpeg');
-                                height: 50px;
-                                width: 50px;
-                                border-radius: 5px;
-                                background-size: cover;
-                                background-position: center;
-                                background-repeat: no-repeat;" class="p-0 c-shadow img-fit img-fluid">
-                        </div>
+                        <div
+                            style="background-image: url('/img/building/nbte-21.jpeg'); height: 50px; width: 50px; border-radius: 5px; background-size: cover; background-position: center; background-repeat: no-repeat"
+                            class="p-0 c-shadow img-fit img-fluid"
+                        ></div>
                         <div class="">
-                            <div class="font-bold text-600 text-xl mb-2">{{item.name}}</div>
-                            <div class="font-medium text-600">Remaining Quantity : {{item.inventory.quantity}} units</div>
+                            <div class="font-bold text-600 text-xl mb-2">{{ item.name }}</div>
+                            <div class="font-medium text-600">Remaining Quantity : {{ item.inventory.quantity }} units</div>
                         </div>
                         <Tag class="px-4" severity="warning" value="LOWSTOCK"></Tag>
                     </div>
@@ -261,9 +257,7 @@ onMounted(() => {
                     <Column field="name" header="Name" :sortable="true" style="width: 30%"></Column>
                     <Column field="category.name" header="Category" :sortable="true" style="width: 30%"></Column>
                     <Column field="unit_price" header="Unit Price" :sortable="true" style="width: 15%">
-                        <template #body="slotProps">
-                            ₦{{ slotProps.data.unit_price }}
-                        </template>
+                        <template #body="slotProps"> ₦{{ slotProps.data.unit_price }} </template>
                     </Column>
                     <Column style="width: 20%">
                         <template #header> Status </template>

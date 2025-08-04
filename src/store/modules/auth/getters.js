@@ -1,8 +1,4 @@
-import {
-    GET_USER_TOKEN_GETTER,
-    IS_USER_AUTHENTICATE_GETTER,
-    GET_USER_DATA_GETTER,
-} from '../../storeconstants';
+import { GET_USER_TOKEN_GETTER, IS_USER_AUTHENTICATE_GETTER, GET_USER_DATA_GETTER } from '../../storeconstants';
 
 export default {
     [GET_USER_TOKEN_GETTER]: (state) => {
@@ -22,7 +18,7 @@ export default {
             token: state.token,
             expiresIn: state.expiresIn,
             refreshToken: state.refreshToken,
-            role: state.role,
+            role: state.role
         };
-    },
+    }
 };

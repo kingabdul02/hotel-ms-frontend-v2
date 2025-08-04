@@ -13,20 +13,21 @@ const menu = ref();
 const items = ref([
     {
         label: 'Options',
-        items: [{
-            label: 'Profile',
-            icon: 'pi pi-user',
-            command: () => {
-                this.goToProfile();
+        items: [
+            {
+                label: 'Profile',
+                icon: 'pi pi-user',
+                command: () => {
+                    this.goToProfile();
+                }
+            },
+            {
+                label: 'Logout',
+                icon: 'pi pi-sign-out',
+                command: () => {
+                    this.logout();
+                }
             }
-        },
-        {
-            label: 'Logout',
-            icon: 'pi pi-sign-out',
-            command: () => {
-                this.logout();
-            }
-        }
         ]
     }
 ]);
@@ -86,6 +87,20 @@ const isOutsideClicked = (event) => {
 };
 </script>
 
+<script>
+export default {
+    methods: {
+        goToProfile() {
+            // Use Vue Router's push method to navigate to the desired route
+            // this.$router.push('/booking/rooms/details/room-c-12');
+        },
+        logout() {
+            // this.$router.push('/booking/rooms');
+        }
+    }
+};
+</script>
+
 <template>
     <div class="layout-topbar">
         <router-link to="/" class="layout-topbar-logo">
@@ -103,8 +118,7 @@ const isOutsideClicked = (event) => {
 
         <div class="layout-topbar-menu" :class="topbarMenuClasses">
             <Chip class="montserrat-font" label="idreesbalaumar@gmail.com" image="/img/user-avatar.png" />
-            <button @click="toggle" aria-haspopup="true" aria-controls="overlay_menu"
-                class="p-link layout-topbar-button">
+            <button @click="toggle" aria-haspopup="true" aria-controls="overlay_menu" class="p-link layout-topbar-button">
                 <i class="pi pi-user"></i>
                 <span>Profile</span>
             </button>
@@ -114,17 +128,3 @@ const isOutsideClicked = (event) => {
 </template>
 
 <style lang="scss" scoped></style>
-
-<script>
-export default {
-    methods: {
-        goToProfile() {
-            // Use Vue Router's push method to navigate to the desired route
-            // this.$router.push('/booking/rooms/details/room-c-12');
-        },
-        logout() {
-            // this.$router.push('/booking/rooms');
-        }
-    }
-}
-</script>

@@ -5,7 +5,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { mapMutations } from 'vuex';
-import axiosInstance from '@/service/axiosInstance';
+import axiosInstance from '@/service/AxiosInstance';
 import { LOADING_SPINNER_SHOW_MUTATION, IS_USER_AUTHENTICATE_GETTER, GET_USER_DATA_GETTER } from '../../../store/storeconstants';
 import { useToast } from 'primevue/usetoast';
 const toast = useToast();
@@ -173,6 +173,15 @@ const handlePayment = () => {
 };
 </script>
 
+<script>
+export default {
+    methods: {
+        navigateToRooms() {
+            this.$router.push('/booking/rooms');
+        }
+    }
+};
+</script>
 <template>
     <Dialog v-model:visible="showBookingDetail" modal header="BOOKING DETAILS" class="montserrat-font" :style="{ width: '60vw' }" :breakpoints="{ '1199px': '75vw', '575px': '90vw' }">
         <div class="grid pt-5">
@@ -457,7 +466,7 @@ const handlePayment = () => {
                                 ><span
                                     >We will send you an email confirming your reservation
                                     <br />
-                                    <span class="text-primary">{{userEmail}}</span>
+                                    <span class="text-primary">{{ userEmail }}</span>
                                 </span>
                             </p>
                             <p class="text-500 text-1xl mb-3 font-bold">
@@ -644,12 +653,3 @@ const handlePayment = () => {
         </div>
     </div>
 </template>
-<script>
-export default {
-    methods: {
-        navigateToRooms() {
-            this.$router.push('/booking/rooms');
-        }
-    }
-};
-</script>

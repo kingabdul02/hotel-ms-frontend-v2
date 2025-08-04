@@ -15,10 +15,7 @@ const logoUrl = computed(() => {
         by
         <span class="font-medium ml-2">PrimeVue</span> -->
         <div class="footer-content text-center">
-            <p>
-                <span class="text-400">NBTE Consult Limited</span> | <span class="text-400">© 2024 All rights
-                    reserved.</span>
-            </p>
+            <p><span class="text-400">NBTE Consult Limited</span> | <span class="text-400">© 2024 All rights reserved.</span></p>
         </div>
     </div>
 </template>

@@ -5,164 +5,164 @@ import axiosInstance from '@/service/AxiosInstance';
 import { LOADING_SPINNER_SHOW_MUTATION } from '@/store/storeconstants';
 
 export function useBooking() {
-  const store  = useStore();
-  const toast  = useToast();
+    const store = useStore();
+    const toast = useToast();
 
-  /* ───────── Dashboard stats ───────── */
-  const checkInsToday      = ref(0);
-  const checkOutsToday     = ref(0);
-  const availableRoomCount = ref(0);
+    /* ───────── Dashboard stats ───────── */
+    const checkInsToday = ref(0);
+    const checkOutsToday = ref(0);
+    const availableRoomCount = ref(0);
 
-  /* ───────── Paginated bookings ───────── */
-  const recentBookings = ref([]);
-  const pagingMeta     = ref({ current_page: 1, per_page: 10, total: 0 });
+    /* ───────── Paginated bookings ───────── */
+    const recentBookings = ref([]);
+    const pagingMeta = ref({ current_page: 1, per_page: 10, total: 0 });
 
-  /* ───────── Room availability search ───────── */
-  const availableRooms   = ref([]);
-  const isSearchingRooms = ref(false);
+    /* ───────── Room availability search ───────── */
+    const availableRooms = ref([]);
+    const isSearchingRooms = ref(false);
 
-  /* ───────── Reservation creation ───────── */
-  const isCreatingReservation = ref(false);
+    /* ───────── Reservation creation ───────── */
+    const isCreatingReservation = ref(false);
 
-  /* ──────────────────────────────────────────── */
-  const statisticsBooking = async (page = 1, filters = {}) => {
-    const token = getToken();
-    if (!token) return null;
-  
-    try {
-      store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-      const { data } = await axiosInstance.get('/admin/statistics/booking', {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          page,
-          search: filters.search || '',
-          room_type_id: filters.room_type_id || '',
-          payment_status: filters.payment_status || '',
-          check_in_from: filters.check_in_from || '',
-          check_in_to: filters.check_in_to || '',
+    /* ──────────────────────────────────────────── */
+    const statisticsBooking = async (page = 1, filters = {}) => {
+        const token = getToken();
+        if (!token) return null;
+
+        try {
+            store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
+            const { data } = await axiosInstance.get('/admin/statistics/booking', {
+                headers: { Authorization: `Bearer ${token}` },
+                params: {
+                    page,
+                    search: filters.search || '',
+                    room_type_id: filters.room_type_id || '',
+                    payment_status: filters.payment_status || '',
+                    check_in_from: filters.check_in_from || '',
+                    check_in_to: filters.check_in_to || ''
+                }
+            });
+
+            // set state...
+            checkInsToday.value = data.checkInsToday ?? 0;
+            checkOutsToday.value = data.checkOutsToday ?? 0;
+            availableRoomCount.value = data.availableRoomCount ?? 0;
+
+            const pageObj = data.recentBookings;
+            recentBookings.value = pageObj.data;
+            pagingMeta.value = {
+                current_page: pageObj.current_page,
+                per_page: Number(pageObj.per_page),
+                total: pageObj.total
+            };
+
+            return data;
+        } catch (err) {
+            errorToast('Failed to fetch booking statistics', err);
+            return null;
+        } finally {
+            store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
         }
-      });
-  
-      // set state...
-      checkInsToday.value      = data.checkInsToday      ?? 0;
-      checkOutsToday.value     = data.checkOutsToday     ?? 0;
-      availableRoomCount.value = data.availableRoomCount ?? 0;
-  
-      const pageObj = data.recentBookings;
-      recentBookings.value = pageObj.data;
-      pagingMeta.value = {
-        current_page: pageObj.current_page,
-        per_page    : Number(pageObj.per_page),
-        total       : pageObj.total
-      };
-  
-      return data;
-    } catch (err) {
-      errorToast('Failed to fetch booking statistics', err);
-      return null;
-    } finally {
-      store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
-    }
-  };  
+    };
 
-   /* ─────── booking actions (unchanged) ─────── */
-   const handleCheckIn = async (id) => actionRequest(`/admin/check-in-booking/${id}`, 'Booking checked in successfully');
-   const handleCheckOut = async (id) => actionRequest(`/admin/check-out-booking/${id}`, 'Booking checked out successfully');
+    /* ─────── booking actions (unchanged) ─────── */
+    const handleCheckIn = async (id) => actionRequest(`/admin/check-in-booking/${id}`, 'Booking checked in successfully');
+    const handleCheckOut = async (id) => actionRequest(`/admin/check-out-booking/${id}`, 'Booking checked out successfully');
 
-  const actionRequest = async (url, successMessage) => {
-    const token = getToken();
-    if (!token) return false;
+    const actionRequest = async (url, successMessage) => {
+        const token = getToken();
+        if (!token) return false;
 
-    try {
-      await axiosInstance.get(url, {}, { headers: { Authorization: `Bearer ${token}` } });
-      toast.add({ severity: 'success', summary: 'Success', detail: successMessage, life: 3000 });
-      // refresh dashboard to include new booking
-      await statisticsBooking(pagingMeta.value.current_page);
-      return true;
-    } catch (err) {
-      errorToast('Action failed', err);
-      return false;
-    }
-  };
+        try {
+            await axiosInstance.get(url, {}, { headers: { Authorization: `Bearer ${token}` } });
+            toast.add({ severity: 'success', summary: 'Success', detail: successMessage, life: 3000 });
+            // refresh dashboard to include new booking
+            await statisticsBooking(pagingMeta.value.current_page);
+            return true;
+        } catch (err) {
+            errorToast('Action failed', err);
+            return false;
+        }
+    };
 
-  /* ───────── Search for available rooms ───────── */
-  const searchRooms = async (params) => {
-    const token = getToken();
-    if (!token) return [];
+    /* ───────── Search for available rooms ───────── */
+    const searchRooms = async (params) => {
+        const token = getToken();
+        if (!token) return [];
 
-    isSearchingRooms.value = true;
-    try {
-      const { data } = await axiosInstance.get('/room/search', {
-        headers: { Authorization: `Bearer ${token}` },
-        params
-      });
-      availableRooms.value = data?.data || data;
-      return availableRooms.value;
-    } catch (err) {
-      errorToast('Room search failed', err);
-      return [];
-    } finally {
-      isSearchingRooms.value = false;
-    }
-  };
+        isSearchingRooms.value = true;
+        try {
+            const { data } = await axiosInstance.get('/room/search', {
+                headers: { Authorization: `Bearer ${token}` },
+                params
+            });
+            availableRooms.value = data?.data || data;
+            return availableRooms.value;
+        } catch (err) {
+            errorToast('Room search failed', err);
+            return [];
+        } finally {
+            isSearchingRooms.value = false;
+        }
+    };
 
-  /* ───────── Create a reservation ───────── */
-  const createReservation = async (payload) => {
-    const token = getToken();
-    if (!token) return false;
-    isCreatingReservation.value = true;
-    try {
-      await axiosInstance.post('/admin/book-room', payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Reservation created', life: 3000 });
-      // refresh dashboard to include new booking
-      await statisticsBooking(pagingMeta.value.current_page);
-      return true;
-    } catch (err) {
-      errorToast('Reservation creation failed', err);
-      return false;
-    } finally {
-      isCreatingReservation.value = false;
-    }
-  };
+    /* ───────── Create a reservation ───────── */
+    const createReservation = async (payload) => {
+        const token = getToken();
+        if (!token) return false;
+        isCreatingReservation.value = true;
+        try {
+            await axiosInstance.post('/admin/book-room', payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            toast.add({ severity: 'success', summary: 'Success', detail: 'Reservation created', life: 3000 });
+            // refresh dashboard to include new booking
+            await statisticsBooking(pagingMeta.value.current_page);
+            return true;
+        } catch (err) {
+            errorToast('Reservation creation failed', err);
+            return false;
+        } finally {
+            isCreatingReservation.value = false;
+        }
+    };
 
-  /* ───────── Helpers ───────── */
-  const getToken = () => {
-    const token = JSON.parse(localStorage.getItem('userData') || '{}')?.token;
-    if (!token) {
-      toast.add({ severity: 'error', summary: 'Error', detail: 'Authentication token missing', life: 3000 });
-    }
-    return token;
-  };
+    /* ───────── Helpers ───────── */
+    const getToken = () => {
+        const token = JSON.parse(localStorage.getItem('userData') || '{}')?.token;
+        if (!token) {
+            toast.add({ severity: 'error', summary: 'Error', detail: 'Authentication token missing', life: 3000 });
+        }
+        return token;
+    };
 
-  const errorToast = (msg, err) => {
-    toast.add({ severity: 'error', summary: 'Error', detail: `${msg}: ${err?.message || err}`, life: 4000 });
-  };
+    const errorToast = (msg, err) => {
+        toast.add({ severity: 'error', summary: 'Error', detail: `${msg}: ${err?.message || err}`, life: 4000 });
+    };
 
-  /* ───────── Exports ───────── */
-  return {
-    /* stats & bookings */
-    statisticsBooking,
-    recentBookings,
-    pagingMeta,
-    checkInsToday,
-    checkOutsToday,
-    availableRoomCount,
+    /* ───────── Exports ───────── */
+    return {
+        /* stats & bookings */
+        statisticsBooking,
+        recentBookings,
+        pagingMeta,
+        checkInsToday,
+        checkOutsToday,
+        availableRoomCount,
 
-    /* availability search */
-    searchRooms,
-    availableRooms,
-    isSearchingRooms,
+        /* availability search */
+        searchRooms,
+        availableRooms,
+        isSearchingRooms,
 
-    /* reservation */
-    createReservation,
-    isCreatingReservation,
-    /* booking actions */
-    handleCheckIn,
-    handleCheckOut,
+        /* reservation */
+        createReservation,
+        isCreatingReservation,
+        /* booking actions */
+        handleCheckIn,
+        handleCheckOut,
 
-    /* toast util (optional external) */
-    toast
-  };
+        /* toast util (optional external) */
+        toast
+    };
 }

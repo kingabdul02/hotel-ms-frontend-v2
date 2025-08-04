@@ -19,12 +19,12 @@ const deleteRecordDialog = ref(false);
 const confirmDeleteModal = ref(false);
 const detailsDialog = ref(false);
 const record = ref({
-    name: "",
-    description: "",
+    name: '',
+    description: '',
     category_id: null,
     unit_price: 0,
-    reorder_level: "",
-    image_url: "",
+    reorder_level: '',
+    image_url: ''
 });
 const selectedRecord = ref([]);
 const itemCategories = ref([]);
@@ -59,12 +59,12 @@ onMounted(() => {
 const openNew = () => {
     operation.value = 'Add New';
     record.value = {
-        name: "",
-        description: "",
+        name: '',
+        description: '',
         unit_price: 0,
         category_id: null,
-        reorder_level: "",
-        image_url: "",
+        reorder_level: '',
+        image_url: ''
     };
     validationErrors.value = {};
     submitted.value = false;
@@ -86,11 +86,11 @@ const onSelectedFiles = (event) => {
 const validateForm = () => {
     validationErrors.value = {};
     const requiredFields = {
-        name: "Item Name",
-        description: "Description",
-        category_id: "Item Category",
-        unit_price: "Unit Price",
-        reorder_level: "Reorder level",
+        name: 'Item Name',
+        description: 'Description',
+        category_id: 'Item Category',
+        unit_price: 'Unit Price',
+        reorder_level: 'Reorder level'
         // image_url: "Image",
     };
 
@@ -109,14 +109,14 @@ const saveRecord = async () => {
 
     try {
         if (!validateForm()) {
-            throw new Error("Validation failed");
+            throw new Error('Validation failed');
         }
 
         if (selectedFile.value && selectedFile.value.length > 0) {
             const uploadedImage = await uploadImage(selectedFile.value[0]);
-            record.value.image_url = uploadedImage
+            record.value.image_url = uploadedImage;
         }
-        
+
         if (record.value.id) {
             await recordService.updateRecord(record.value.id, record.value);
             const index = findIndexById(record.value.id);
@@ -136,10 +136,10 @@ const saveRecord = async () => {
         recordDialog.value = false;
         record.value = {};
     } catch (error) {
-        let errorMessage = error?.response?.data?.message ?? "Operation Failed";
+        let errorMessage = error?.response?.data?.message ?? 'Operation Failed';
 
-        if (error.message === "Validation failed") {
-            errorMessage = "Please fill in all required fields.";
+        if (error.message === 'Validation failed') {
+            errorMessage = 'Please fill in all required fields.';
         }
 
         toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
@@ -211,11 +211,10 @@ const onTemplatedUpload = (event) => {
 };
 
 const getItemCategoryName = (category_id) => {
-    const category = itemCategories.value.find(cat => cat.id === category_id);
+    const category = itemCategories.value.find((cat) => cat.id === category_id);
     return category ? category.name : '';
 };
 </script>
-
 
 <template>
     <Dialog v-model:visible="detailsDialog" modal header="Record Details" :style="{ width: '50vw' }">
@@ -255,7 +254,7 @@ const getItemCategoryName = (category_id) => {
                 <h5 class="font-bold uppercase">
                     <span class="text-primary">{{ operation }}:</span> {{ recordTitle }}
                 </h5>
-                <hr>
+                <hr />
                 <div class="p-fluid formgrid grid">
                     <div class="field col-12 md:col-6">
                         <label for="name">Name</label>
@@ -285,21 +284,19 @@ const getItemCategoryName = (category_id) => {
                     <div class="field col-12 md:col-6">
                         <label for="image_url">Image</label>
                         <!-- <input type="file" @change="handleFileUpload" class="w-full" /> -->
-                        <FileUpload name="image_url" url="/upload" @upload="onTemplatedUpload" :multiple="false"
-                            accept="image/*" :maxFileSize="1000000" @select="onSelectedFiles">
+                        <FileUpload name="image_url" url="/upload" @upload="onTemplatedUpload" :multiple="false" accept="image/*" :maxFileSize="1000000" @select="onSelectedFiles">
                             <template #header="{ chooseCallback, uploadCallback, clearCallback, files }">
                                 <div class="flex flex-wrap justify-content-between align-items-center">
                                     <Button label="Choose" icon="pi pi-plus" class="mr-2" @click="chooseCallback" />
                                     <Button label="Upload" icon="pi pi-upload" class="mr-2" @click="uploadCallback" />
-                                    <Button label="Clear" icon="pi pi-times" class="mr-2" @click="clearCallback"
-                                        v-if="files.length" />
+                                    <Button label="Clear" icon="pi pi-times" class="mr-2" @click="clearCallback" v-if="files.length" />
                                 </div>
                             </template>
                         </FileUpload>
                         <small v-if="validationErrors.image_url" class="p-error">{{ validationErrors.image_url }}</small>
                     </div>
                 </div>
-                <hr>
+                <hr />
                 <Button label="Cancel" icon="pi pi-times" outlined @click="hideDialog" class="p-button-danger mr-2" />
                 <Button label="Save" icon="pi pi-check" @click="saveRecord" class="p-button-primary" />
             </div>
@@ -315,7 +312,21 @@ const getItemCategoryName = (category_id) => {
                     </template>
                 </Toolbar>
 
-                <DataTable ref="dt" :value="records" v-model:selection="selectedRecord" :rowHover="true" filterDisplay="menu" showGridlines dataKey="id" :paginator="true" :rows="10" :filters="filters" paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown" :rowsPerPageOptions="[5, 10, 25]" currentPageReportTemplate="Showing {first} to {last} of {totalRecords} records">
+                <DataTable
+                    ref="dt"
+                    :value="records"
+                    v-model:selection="selectedRecord"
+                    :rowHover="true"
+                    filterDisplay="menu"
+                    showGridlines
+                    dataKey="id"
+                    :paginator="true"
+                    :rows="10"
+                    :filters="filters"
+                    paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+                    :rowsPerPageOptions="[5, 10, 25]"
+                    currentPageReportTemplate="Showing {first} to {last} of {totalRecords} records"
+                >
                     <template #header>
                         <div class="flex flex-column md:flex-row md:justify-content-between md:align-items-center">
                             <h5 class="m-0 uppercase"><span class="text-primary">Manage : </span> {{ recordTitle }}(s)</h5>
@@ -353,7 +364,10 @@ const getItemCategoryName = (category_id) => {
                 </DataTable>
 
                 <Dialog v-model:visible="confirmDeleteModal" modal header="Confirm Delete" :style="{ width: '30rem' }">
-                    <p>Are you sure you want to delete <strong>{{ record.name }}</strong>?</p>
+                    <p>
+                        Are you sure you want to delete <strong>{{ record.name }}</strong
+                        >?
+                    </p>
                     <div class="flex justify-content-end gap-2">
                         <Button type="button" label="No" severity="secondary" @click="confirmDeleteModal = false"></Button>
                         <Button type="button" label="Yes" @click="confirmDeleteRecordConfirmed()"></Button>

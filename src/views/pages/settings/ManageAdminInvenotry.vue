@@ -23,19 +23,19 @@ const confirmDeleteModal = ref(false);
 const detailsDialog = ref(false);
 const record = ref({
     item_id: 0,
-    transaction_type: "IN",
+    transaction_type: 'IN',
     quantity: 0,
-    transaction_date: "",
-    remarks: "",
+    transaction_date: '',
+    remarks: ''
 });
 
 const categoryId = ref(0);
 const useItemRecord = ref({
     item_id: categoryId,
-    transaction_type: "out",
+    transaction_type: 'out',
     quantity: null,
-    transaction_date: "",
-    remarks: "",
+    transaction_date: '',
+    remarks: ''
 });
 const selectedRecord = ref([]);
 const itemCategories = ref([]);
@@ -58,7 +58,7 @@ const scrollToTop = () => {
 
 onMounted(() => {
     scrollToTop();
-    getInventoryData()
+    getInventoryData();
     // store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
 });
 
@@ -74,14 +74,14 @@ const getInventoryData = async () => {
         inventories.value = data;
         store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
     });
-}
+};
 
 const populateRecords = async () => {
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
         const response = await itemService.getRecords2();
         console.log(response);
-        records.value = response.map(item => ({
+        records.value = response.map((item) => ({
             ...item,
             itemName: item.name,
             itemPhoto: item.image_url,
@@ -105,10 +105,10 @@ const openNew = () => {
     operation.value = 'Add New';
     record.value = {
         item_id: null,
-        transaction_type: "IN",
+        transaction_type: 'IN',
         quantity: null,
         transaction_date: null,
-        remarks: null,
+        remarks: null
     };
     validationErrors.value = {};
     submitted.value = false;
@@ -122,7 +122,7 @@ const useItemStarts = () => {
     useItemRecord.value = {
         item_id: categoryId,
         quantity: null,
-        remarks: null,
+        remarks: null
     };
     validationErrors.value = {};
     submitted.value = false;
@@ -149,7 +149,7 @@ const validateForm = () => {
         item_id: 'Item',
         quantity: 'Quantity',
         transaction_date: 'Transaction date',
-        remarks: 'Remarks',
+        remarks: 'Remarks'
     };
 
     for (const field in requiredFields) {
@@ -166,7 +166,7 @@ const validateItemForm = () => {
     const requiredFields = {
         // item_id: 'Item',
         quantity: 'Quantity',
-        remarks: 'Remarks',
+        remarks: 'Remarks'
     };
 
     for (const field in requiredFields) {
@@ -184,7 +184,7 @@ const saveRecord = async () => {
 
     try {
         if (!validateForm()) {
-            throw new Error("Validation failed");
+            throw new Error('Validation failed');
         }
 
         if (record.value.id) {
@@ -193,8 +193,8 @@ const saveRecord = async () => {
             if (index !== -1) {
                 records.value[index] = {
                     ...record.value,
-                    itemName: items.value.find(item => item.id === record.value.item_id)?.name || 'Unknown',
-                    itemPhoto: items.value.find(item => item.id === record.value.item_id)?.image_url || 'Unknown',
+                    itemName: items.value.find((item) => item.id === record.value.item_id)?.name || 'Unknown',
+                    itemPhoto: items.value.find((item) => item.id === record.value.item_id)?.image_url || 'Unknown'
                 };
             }
             store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
@@ -209,7 +209,7 @@ const saveRecord = async () => {
             record.value.id = data.id;
             records.value.push({
                 ...record.value,
-                itemName: items.value.find(item => item.id === record.value.item_id)?.name || 'Unknown'
+                itemName: items.value.find((item) => item.id === record.value.item_id)?.name || 'Unknown'
             });
             store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
             inventoryService.getRecords().then((data) => {
@@ -223,10 +223,10 @@ const saveRecord = async () => {
         recordDialog.value = false;
         record.value = {};
     } catch (error) {
-        let errorMessage = error?.response?.data?.message ?? "Operation Failed";
+        let errorMessage = error?.response?.data?.message ?? 'Operation Failed';
 
-        if (error.message === "Validation failed") {
-            errorMessage = "Please fill in all required fields.";
+        if (error.message === 'Validation failed') {
+            errorMessage = 'Please fill in all required fields.';
         }
 
         toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
@@ -241,7 +241,7 @@ const useItem = async () => {
 
     try {
         if (!validateItemForm()) {
-            throw new Error("Validation failed");
+            throw new Error('Validation failed');
         }
 
         // Add new item logic
@@ -267,8 +267,8 @@ const useItem = async () => {
     } catch (error) {
         // let errorMessage = error?.response?.data?.message ?? "Operation Failed";
 
-        if (error.message === "Validation failed") {
-            errorMessage = "Please fill in all required fields.";
+        if (error.message === 'Validation failed') {
+            errorMessage = 'Please fill in all required fields.';
         }
 
         toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
@@ -277,7 +277,6 @@ const useItem = async () => {
     }
 };
 
-
 const editRecord = (editRecord) => {
     operation.value = 'Edit';
     record.value = { ...editRecord };
@@ -285,9 +284,7 @@ const editRecord = (editRecord) => {
     recordDialog.value = true;
 };
 
-
 const categoryName = ref('');
-
 
 // const showDetails = (detailsRecord) => {
 //     record.value = { ...detailsRecord };
@@ -314,8 +311,6 @@ const showDetails = (detailsRecord) => {
     // Show the details dialog
     detailsDialog.value = true;
 };
-
-
 
 const confirmDeleteRecord = (deleteRecord) => {
     record.value = { ...deleteRecord };
@@ -357,14 +352,13 @@ const initFilters = () => {
 };
 </script>
 
-
 <template>
     <Dialog v-model:visible="detailsDialog" modal header="Record Details" :style="{ width: '70vw' }">
         <div v-if="useItemdDialog" class="card">
             <h5 class="font-bold uppercase">
                 <span class="text-primary">{{ operation }}:</span> {{ categoryName }}
             </h5>
-            <hr>
+            <hr />
             <div class="p-fluid formgrid grid">
                 <!-- <div class="field col-12 md:col-6">
                     <label for="item_id">Item</label>
@@ -375,27 +369,21 @@ const initFilters = () => {
                 </div> -->
                 <div class="field col-12 md:col-6">
                     <label for="quantity">Quantity</label>
-                    <InputText id="quantity" v-model="useItemRecord.quantity" required autoFocus class="w-full"
-                        placeholder="Enter Quantity" />
+                    <InputText id="quantity" v-model="useItemRecord.quantity" required autoFocus class="w-full" placeholder="Enter Quantity" />
                     <small v-if="validationErrors.quantity" class="p-error">{{ validationErrors.quantity }}</small>
                 </div>
                 <div class="field col-12 md:col-6">
                     <label for="transaction_date">Transaction date</label>
-                    <Calendar v-model="useItemRecord.transaction_date" placeholder="Transaction date" showIcon
-                        iconDisplay="input" inputId="transaction_date" :minDate="today" />
-                    <small v-if="validationErrors.transaction_date" class="p-error">{{
-                        validationErrors.transaction_date
-                        }}</small>
+                    <Calendar v-model="useItemRecord.transaction_date" placeholder="Transaction date" showIcon iconDisplay="input" inputId="transaction_date" :minDate="today" />
+                    <small v-if="validationErrors.transaction_date" class="p-error">{{ validationErrors.transaction_date }}</small>
                 </div>
                 <div class="field col-12 md:col-6">
                     <label for="remarks">Remarks</label>
-                    <InputText id="remarks" v-model="useItemRecord.remarks" required autoFocus class="w-full"
-                        placeholder="Enter remarks" />
-                    <small v-if="validationErrors.remarks" class="p-error">{{ validationErrors.remarks
-                        }}</small>
+                    <InputText id="remarks" v-model="useItemRecord.remarks" required autoFocus class="w-full" placeholder="Enter remarks" />
+                    <small v-if="validationErrors.remarks" class="p-error">{{ validationErrors.remarks }}</small>
                 </div>
             </div>
-            <hr>
+            <hr />
             <Button label="Cancel" icon="pi pi-times" outlined @click="hideItemDialog" class="p-button-danger mr-2" />
             <Button label="Save" icon="pi pi-check" @click="useItem" class="p-button-primary" />
         </div>
@@ -406,8 +394,7 @@ const initFilters = () => {
                     <span>{{ record?.name }}</span>
                 </div>
                 <div class="field">
-                    <img :src="record?.image_url || '/img/noimage.gif'" :alt="record?.image_url"
-                        class="shadow-2 border-round" width="50" />
+                    <img :src="record?.image_url || '/img/noimage.gif'" :alt="record?.image_url" class="shadow-2 border-round" width="50" />
                 </div>
                 <div class="field">
                     <label class="font-bold mr-2">Item Category</label>
@@ -430,8 +417,7 @@ const initFilters = () => {
                 <div class="flex justify-content-between align-items-center mb-2">
                     <div class="font-bold text-3xl text-900"><span class="text-primary">Inventory Movements</span></div>
                     <div>
-                        <Button icon="pi pi-sort-amount-down" label="Use Inventory Item" class="p-button-primary"
-                            @click="useItemStarts()" severity="success" />
+                        <Button icon="pi pi-sort-amount-down" label="Use Inventory Item" class="p-button-primary" @click="useItemStarts()" severity="success" />
                     </div>
                 </div>
                 <DataTable ref="dt" :value="record?.inventoryMovements?.data" showGridlines :rowHover="true" dataKey="id">
@@ -482,38 +468,30 @@ const initFilters = () => {
                 <h5 class="font-bold uppercase">
                     <span class="text-primary">{{ operation }}:</span> {{ recordTitle }}
                 </h5>
-                <hr>
+                <hr />
                 <div class="p-fluid formgrid grid">
                     <div class="field col-12 md:col-6">
                         <label for="item_id">Item</label>
-                        <Dropdown id="item_id" v-model="record.item_id" :options="items" optionLabel="name"
-                            optionValue="id" placeholder="Select a Item" class="w-full" />
-                        <small v-if="validationErrors.item_id" class="p-error">{{ validationErrors.item_id }}
-                        </small>
+                        <Dropdown id="item_id" v-model="record.item_id" :options="items" optionLabel="name" optionValue="id" placeholder="Select a Item" class="w-full" />
+                        <small v-if="validationErrors.item_id" class="p-error">{{ validationErrors.item_id }} </small>
                     </div>
                     <div class="field col-12 md:col-6">
                         <label for="quantity">Quantity</label>
-                        <InputText id="quantity" v-model="record.quantity" required autoFocus class="w-full"
-                            placeholder="Enter Quantity" />
+                        <InputText id="quantity" v-model="record.quantity" required autoFocus class="w-full" placeholder="Enter Quantity" />
                         <small v-if="validationErrors.quantity" class="p-error">{{ validationErrors.quantity }}</small>
                     </div>
                     <div class="field col-12 md:col-6">
                         <label for="transaction_date">Transaction date</label>
-                        <Calendar v-model="record.transaction_date" placeholder="Transaction date" showIcon
-                            iconDisplay="input" inputId="transaction_date" :minDate="today" />
-                        <small v-if="validationErrors.transaction_date" class="p-error">{{
-                            validationErrors.transaction_date
-                        }}</small>
+                        <Calendar v-model="record.transaction_date" placeholder="Transaction date" showIcon iconDisplay="input" inputId="transaction_date" :minDate="today" />
+                        <small v-if="validationErrors.transaction_date" class="p-error">{{ validationErrors.transaction_date }}</small>
                     </div>
                     <div class="field col-12 md:col-6">
                         <label for="remarks">Remarks</label>
-                        <InputText id="remarks" v-model="record.remarks" required autoFocus class="w-full"
-                            placeholder="Enter remarks" />
-                        <small v-if="validationErrors.remarks" class="p-error">{{ validationErrors.remarks
-                            }}</small>
+                        <InputText id="remarks" v-model="record.remarks" required autoFocus class="w-full" placeholder="Enter remarks" />
+                        <small v-if="validationErrors.remarks" class="p-error">{{ validationErrors.remarks }}</small>
                     </div>
                 </div>
-                <hr>
+                <hr />
                 <Button label="Cancel" icon="pi pi-times" outlined @click="hideDialog" class="p-button-danger mr-2" />
                 <Button label="Save" icon="pi pi-check" @click="saveRecord" class="p-button-primary" />
             </div>
@@ -536,9 +514,7 @@ const initFilters = () => {
                             <div class="flex align-items-center text-700 flex-wrap">
                                 <div class="mr-5 flex align-items-center mt-3">
                                     <i class="pi pi-box text-primary font-bold mr-2"></i>
-                                    <span> Inventory records <Badge :value="inventories?.length" severity="success">
-                                        </Badge>
-                                    </span>
+                                    <span> Inventory records <Badge :value="inventories?.length" severity="success"> </Badge> </span>
                                 </div>
                                 <div class="mr-5 flex align-items-center mt-3">
                                     <i class="pi pi-box text-primary font-bold mr-2"></i>
@@ -546,9 +522,7 @@ const initFilters = () => {
                                 </div>
                                 <div class="flex align-items-center mt-3">
                                     <i class="pi pi-box text-primary font-bold mr-2"></i>
-                                    <span> Item Categories <Badge :value="itemCategories?.length" severity="success">
-                                        </Badge>
-                                    </span>
+                                    <span> Item Categories <Badge :value="itemCategories?.length" severity="success"> </Badge> </span>
                                 </div>
                             </div>
                         </div>
@@ -565,27 +539,34 @@ const initFilters = () => {
                     </template>
                 </Toolbar>
 
-                <DataTable ref="dt" :value="inventories" v-model:selection="selectedRecord" :rowHover="true"
-                    filterDisplay="menu" showGridlines dataKey="id" :paginator="true" :rows="10" :filters="filters"
+                <DataTable
+                    ref="dt"
+                    :value="inventories"
+                    v-model:selection="selectedRecord"
+                    :rowHover="true"
+                    filterDisplay="menu"
+                    showGridlines
+                    dataKey="id"
+                    :paginator="true"
+                    :rows="10"
+                    :filters="filters"
                     paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                     :rowsPerPageOptions="[5, 10, 25]"
-                    currentPageReportTemplate="Showing {first} to {last} of {totalRecords} records">
+                    currentPageReportTemplate="Showing {first} to {last} of {totalRecords} records"
+                >
                     <template #header>
                         <div class="flex flex-column md:flex-row md:justify-content-between md:align-items-center">
-                            <h5 class="m-0 uppercase"><span class="text-primary">Manage : </span> {{ recordTitle }}(s)
-                            </h5>
+                            <h5 class="m-0 uppercase"><span class="text-primary">Manage : </span> {{ recordTitle }}(s)</h5>
                             <IconField iconPosition="left" class="block mt-2 md:mt-0">
                                 <InputIcon class="pi pi-search" />
-                                <InputText class="w-full sm:w-auto" v-model="filters['global'].value"
-                                    placeholder="Search..." />
+                                <InputText class="w-full sm:w-auto" v-model="filters['global'].value" placeholder="Search..." />
                             </IconField>
                         </div>
                     </template>
                     <Column field="item_id" header="Image">
                         <template #body="slotProps">
                             <span class="p-column-title"></span>
-                            <img :src="slotProps.data.image_url || '/img/noimage.gif'" :alt="slotProps.data.image_url"
-                                class="shadow-2 border-round" width="50" />
+                            <img :src="slotProps.data.image_url || '/img/noimage.gif'" :alt="slotProps.data.image_url" class="shadow-2 border-round" width="50" />
                         </template>
                     </Column>
                     <Column headerStyle="min-width:15rem;" field="item_id" header="Item" :sortable="true">
@@ -594,8 +575,7 @@ const initFilters = () => {
                             {{ slotProps.data.name }}
                         </template>
                     </Column>
-                    <Column headerStyle="min-width:15rem;" field="item_category" header="Item Category"
-                        :sortable="true">
+                    <Column headerStyle="min-width:15rem;" field="item_category" header="Item Category" :sortable="true">
                         <template #body="slotProps">
                             <span class="p-column-title">Item Category</span>
                             {{ slotProps.data.category.name }}
@@ -615,8 +595,7 @@ const initFilters = () => {
                     </Column>
                     <Column headerStyle="min-width:13rem;" header="Action(s)">
                         <template #body="slotProps">
-                            <Button icon="pi pi-eye" class="mr-2 p-button-text" severity="info" rounded
-                                @click="showDetails(slotProps.data)" />
+                            <Button icon="pi pi-eye" class="mr-2 p-button-text" severity="info" rounded @click="showDetails(slotProps.data)" />
                         </template>
                     </Column>
                 </DataTable>

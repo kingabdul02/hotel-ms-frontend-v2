@@ -1,15 +1,5 @@
 import axiosInstance from '@/service/AxiosInstance';
-import {
-    AUTH_ACTION,
-    GUEST_AUTH_ACTION,
-    LOGIN_ACTION,
-    LOGIN_ACTION_GUEST,
-    AUTO_LOGIN_ACTION,
-    LOGOUT_ACTION,
-    SET_USER_TOKEN_DATA_MUTATION,
-    SIGNUP_ACTION,
-    GUEST_AUTH_ACTION_REG,
-} from '../../storeconstants';
+import { AUTH_ACTION, GUEST_AUTH_ACTION, LOGIN_ACTION, LOGIN_ACTION_GUEST, AUTO_LOGIN_ACTION, LOGOUT_ACTION, SET_USER_TOKEN_DATA_MUTATION, SIGNUP_ACTION, GUEST_AUTH_ACTION_REG } from '../../storeconstants';
 
 let logoutTimer;
 
@@ -22,7 +12,7 @@ export default {
             token: null,
             expiresIn: null,
             refreshToken: null,
-            userId: null,
+            userId: null
         });
         localStorage.removeItem('userData');
         if (logoutTimer) {
@@ -33,21 +23,21 @@ export default {
     async [LOGIN_ACTION](context, payload) {
         return context.dispatch(AUTH_ACTION, {
             ...payload,
-            url: `/auth/login`,
+            url: `/auth/login`
         });
     },
 
     async [LOGIN_ACTION_GUEST](context, payload) {
         return context.dispatch(GUEST_AUTH_ACTION, {
             ...payload,
-            url: `/auth/login`,
+            url: `/auth/login`
         });
     },
 
     async [SIGNUP_ACTION](context, payload) {
         return context.dispatch(GUEST_AUTH_ACTION_REG, {
             ...payload,
-            url: `/auth/register`,
+            url: `/auth/register`
         });
     },
 
@@ -72,7 +62,7 @@ export default {
         let postData = {
             email: payload.email,
             password: payload.password,
-            returnSecureToken: true,
+            returnSecureToken: true
         };
         let response = '';
         try {
@@ -98,7 +88,7 @@ export default {
                 expiresIn: new Date().getTime() + 30 * 60 * 100000,
                 refreshToken: response.data.refreshToken,
                 userId: userData.id,
-                role: userData.role,
+                role: userData.role
             };
 
             localStorage.setItem('userData', JSON.stringify(tokenData));
@@ -115,7 +105,7 @@ export default {
         let postData = {
             email: payload.email,
             password: payload.password,
-            returnSecureToken: true,
+            returnSecureToken: true
         };
         let response = '';
         try {
@@ -141,7 +131,7 @@ export default {
                 expiresIn: new Date().getTime() + 30 * 60 * 100000,
                 refreshToken: response.data.refreshToken,
                 userId: userData.id,
-                role: userData.role,
+                role: userData.role
             };
             localStorage.setItem('userData', JSON.stringify(tokenData));
             context.commit(SET_USER_TOKEN_DATA_MUTATION, tokenData);
@@ -162,7 +152,7 @@ export default {
             phone: payload.phone,
             role: 'Guest',
             address: '',
-            returnSecureToken: true,
+            returnSecureToken: true
         };
         let response = '';
         try {
@@ -183,10 +173,10 @@ export default {
                 expiresIn: new Date().getTime() + 30 * 60 * 100000,
                 refreshToken: response.data.refreshToken,
                 userId: userData.id,
-                role: userData.role,
+                role: userData.role
             };
             localStorage.setItem('userData', JSON.stringify(tokenData));
             context.commit(SET_USER_TOKEN_DATA_MUTATION, tokenData);
         }
-    },
+    }
 };

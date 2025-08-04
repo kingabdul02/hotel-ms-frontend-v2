@@ -1,5 +1,5 @@
 // src/service/toastService.js
-import { useToast } from "primevue/usetoast";
+import { useToast } from 'primevue/usetoast';
 export const useToastService = () => {
     const toast = useToast();
 

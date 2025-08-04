@@ -19,10 +19,10 @@ const deleteRecordDialog = ref(false);
 const confirmDeleteModal = ref(false);
 const detailsDialog = ref(false);
 const record = ref({
-    name: "",
-    description: "",
-    location: "",
-    phone: ""
+    name: '',
+    description: '',
+    location: '',
+    phone: ''
 });
 const selectedRecord = ref([]);
 const roomTypes = ref([]);
@@ -91,7 +91,7 @@ const validateForm = () => {
         name: 'Name',
         description: 'Description',
         location: 'Location',
-        phone: 'Phone',
+        phone: 'Phone'
     };
 
     for (const field in requiredFields) {
@@ -109,7 +109,7 @@ const saveRecord = async () => {
 
     try {
         if (!validateForm()) {
-            throw new Error("Validation failed");
+            throw new Error('Validation failed');
         }
 
         if (record.value.id) {
@@ -133,10 +133,10 @@ const saveRecord = async () => {
         recordDialog.value = false;
         record.value = {};
     } catch (error) {
-        let errorMessage = error?.response?.data?.message ?? "Operation Failed";
+        let errorMessage = error?.response?.data?.message ?? 'Operation Failed';
 
-        if (error.message === "Validation failed") {
-            errorMessage = "Please fill in all required fields.";
+        if (error.message === 'Validation failed') {
+            errorMessage = 'Please fill in all required fields.';
         }
 
         toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
@@ -228,35 +228,30 @@ const initFilters = () => {
                 <h5 class="font-bold uppercase">
                     <span class="text-primary">{{ operation }}:</span> {{ recordTitle }}
                 </h5>
-                <hr>
+                <hr />
                 <div class="p-fluid formgrid grid">
                     <div class="field col-12 md:col-6">
                         <label for="name">Name</label>
-                        <InputText id="name" v-model="record.name" required autoFocus class="w-full"
-                            placeholder="Enter name" />
+                        <InputText id="name" v-model="record.name" required autoFocus class="w-full" placeholder="Enter name" />
                         <small v-if="validationErrors.name" class="p-error">{{ validationErrors.name }}</small>
                     </div>
                     <div class="field col-12 md:col-6">
                         <label for="location">Location</label>
-                        <InputText id="location" v-model="record.location" required autoFocus class="w-full"
-                            placeholder="Enter location" />
+                        <InputText id="location" v-model="record.location" required autoFocus class="w-full" placeholder="Enter location" />
                         <small v-if="validationErrors.location" class="p-error">{{ validationErrors.location }}</small>
                     </div>
                     <div class="field col-12 md:col-6">
                         <label for="phone">Phone</label>
-                        <InputText id="phone" v-model="record.phone" required autoFocus class="w-full"
-                            placeholder="Enter phone" />
+                        <InputText id="phone" v-model="record.phone" required autoFocus class="w-full" placeholder="Enter phone" />
                         <small v-if="validationErrors.phone" class="p-error">{{ validationErrors.phone }}</small>
                     </div>
                     <div class="field col-12 md:col-6">
                         <label for="description">Description</label>
-                        <InputText id="description" v-model="record.description" required autoFocus class="w-full"
-                            placeholder="Enter description" />
-                        <small v-if="validationErrors.description" class="p-error">{{ validationErrors.description
-                            }}</small>
+                        <InputText id="description" v-model="record.description" required autoFocus class="w-full" placeholder="Enter description" />
+                        <small v-if="validationErrors.description" class="p-error">{{ validationErrors.description }}</small>
                     </div>
                 </div>
-                <hr>
+                <hr />
                 <Button label="Cancel" icon="pi pi-times" outlined @click="hideDialog" class="p-button-danger mr-2" />
                 <Button label="Save" icon="pi pi-check" @click="saveRecord" class="p-button-primary" />
             </div>
@@ -279,8 +274,7 @@ const initFilters = () => {
                             <div class="flex align-items-center text-700 flex-wrap">
                                 <div class="mr-5 flex align-items-center mt-3">
                                     <i class="pi pi-building text-primary font-bold mr-2"></i>
-                                    <span> Total Hotels <Badge :value="records?.length" severity="success"></Badge>
-                                        </span>
+                                    <span> Total Hotels <Badge :value="records?.length" severity="success"></Badge> </span>
                                 </div>
                                 <div class="mr-5 flex align-items-center mt-3">
                                     <i class="pi pi-building text-primary font-bold mr-2"></i>
@@ -288,9 +282,7 @@ const initFilters = () => {
                                 </div>
                                 <div class="flex align-items-center mt-3">
                                     <i class="pi pi-building text-primary font-bold mr-2"></i>
-                                    <span> Total Room Types <Badge :value="roomTypes?.length" severity="success">
-                                        </Badge>
-                                    </span>
+                                    <span> Total Room Types <Badge :value="roomTypes?.length" severity="success"> </Badge> </span>
                                 </div>
                             </div>
                         </div>
@@ -303,8 +295,7 @@ const initFilters = () => {
                 <Toolbar class="mb-4">
                     <template v-slot:start>
                         <div class="my-2">
-                            <Button label="Add Record" icon="pi pi-plus" class="mr-2" severity="success"
-                                @click="openNew" />
+                            <Button label="Add Record" icon="pi pi-plus" class="mr-2" severity="success" @click="openNew" />
                         </div>
                     </template>
                     <template v-slot:end>
@@ -312,19 +303,27 @@ const initFilters = () => {
                     </template>
                 </Toolbar>
 
-                <DataTable ref="dt" :value="records" v-model:selection="selectedRecord" :rowHover="true"
-                    filterDisplay="menu" showGridlines dataKey="id" :paginator="true" :rows="10" :filters="filters"
+                <DataTable
+                    ref="dt"
+                    :value="records"
+                    v-model:selection="selectedRecord"
+                    :rowHover="true"
+                    filterDisplay="menu"
+                    showGridlines
+                    dataKey="id"
+                    :paginator="true"
+                    :rows="10"
+                    :filters="filters"
                     paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                     :rowsPerPageOptions="[5, 10, 25]"
-                    currentPageReportTemplate="Showing {first} to {last} of {totalRecords} records">
+                    currentPageReportTemplate="Showing {first} to {last} of {totalRecords} records"
+                >
                     <template #header>
                         <div class="flex flex-column md:flex-row md:justify-content-between md:align-items-center">
-                            <h5 class="m-0 uppercase"><span class="text-primary">Manages : </span> {{ recordTitle }}(s)
-                            </h5>
+                            <h5 class="m-0 uppercase"><span class="text-primary">Manages : </span> {{ recordTitle }}(s)</h5>
                             <IconField iconPosition="left" class="block mt-2 md:mt-0">
                                 <InputIcon class="pi pi-search" />
-                                <InputText class="w-full sm:w-auto" v-model="filters['global'].value"
-                                    placeholder="Search..." />
+                                <InputText class="w-full sm:w-auto" v-model="filters['global'].value" placeholder="Search..." />
                             </IconField>
                         </div>
                     </template>
@@ -348,21 +347,20 @@ const initFilters = () => {
                     </Column>
                     <Column headerStyle="min-width:13rem;">
                         <template #body="slotProps">
-                            <Button icon="pi pi-eye" class="mr-2 p-button-text" severity="info" rounded
-                                @click="showDetails(slotProps.data)" />
-                            <Button icon="pi pi-pencil" class="mr-2 p-button-text" severity="success" rounded
-                                @click="editRecord(slotProps.data)" />
-                            <Button icon="pi pi-trash" class="p-button-text" severity="danger" rounded
-                                @click="confirmDeleteRecord(slotProps.data)" />
+                            <Button icon="pi pi-eye" class="mr-2 p-button-text" severity="info" rounded @click="showDetails(slotProps.data)" />
+                            <Button icon="pi pi-pencil" class="mr-2 p-button-text" severity="success" rounded @click="editRecord(slotProps.data)" />
+                            <Button icon="pi pi-trash" class="p-button-text" severity="danger" rounded @click="confirmDeleteRecord(slotProps.data)" />
                         </template>
                     </Column>
                 </DataTable>
 
                 <Dialog v-model:visible="confirmDeleteModal" modal header="Confirm Delete" :style="{ width: '30rem' }">
-                    <p>Are you sure you want to delete <strong>{{ record.name }}</strong>?</p>
+                    <p>
+                        Are you sure you want to delete <strong>{{ record.name }}</strong
+                        >?
+                    </p>
                     <div class="flex justify-content-end gap-2">
-                        <Button type="button" label="No" severity="secondary"
-                            @click="confirmDeleteModal = false"></Button>
+                        <Button type="button" label="No" severity="secondary" @click="confirmDeleteModal = false"></Button>
                         <Button type="button" label="Yes" @click="confirmDeleteRecordConfirmed()"></Button>
                     </div>
                 </Dialog>

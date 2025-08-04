@@ -26,7 +26,7 @@ const record = ref({
     reorder_level: '',
     category_id: 0,
     unit_price: 0,
-    image_url: '',
+    image_url: ''
 });
 const selectedRecord = ref([]);
 const dt = ref(null);
@@ -43,7 +43,7 @@ const scrollToTop = () => {
         top: 0,
         behavior: 'smooth'
     });
-}
+};
 
 onBeforeMount(() => {
     initFilters();
@@ -66,7 +66,7 @@ onMounted(() => {
 
 const openNew = () => {
     // Reset the item and validation errors
-    operation.value = 'Add New'
+    operation.value = 'Add New';
     record.value = {
         name: null,
         description: null,
@@ -82,7 +82,6 @@ const openNew = () => {
     scrollToTop();
     itemDialog.value = true;
 };
-
 
 const hideDialog = () => {
     scrollToTop();
@@ -101,7 +100,7 @@ const validateForm = () => {
         description: 'Description',
         reorder_level: 'Reorder level',
         category_id: 'Category',
-        unit_price: 'Unit price',
+        unit_price: 'Unit price'
     };
 
     for (const field in requiredFields) {
@@ -113,20 +112,19 @@ const validateForm = () => {
     return Object.keys(validationErrors.value).length === 0;
 };
 
-
 const saveItem = async () => {
     submitted.value = true;
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
 
     try {
         if (!validateForm()) {
-            throw new Error("Validation failed");
+            throw new Error('Validation failed');
         }
 
         // Upload selected files and populate record.images
         if (selectedFiles.value && selectedFiles.value.length > 0) {
             const uploadedImages = await Promise.all(
-                selectedFiles.value.map(async file => {
+                selectedFiles.value.map(async (file) => {
                     const response = await uploadImage(file);
                     return { url: response }; // Ensure the correct format
                 })
@@ -157,12 +155,12 @@ const saveItem = async () => {
         selectedFiles.value = [];
     } catch (error) {
         console.error(error);
-        let errorMessage = "Operation Failed";
+        let errorMessage = 'Operation Failed';
 
-        if (error.message === "Validation failed") {
-            errorMessage = "Please fill in all required fields.";
-        } else if (error.message === "File upload failed") {
-            errorMessage = "File upload failed. Please try again.";
+        if (error.message === 'Validation failed') {
+            errorMessage = 'Please fill in all required fields.';
+        } else if (error.message === 'File upload failed') {
+            errorMessage = 'File upload failed. Please try again.';
         }
 
         toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
@@ -171,10 +169,8 @@ const saveItem = async () => {
     }
 };
 
-
-
 const editRecord = (editRecord) => {
-    operation.value = 'Edit'
+    operation.value = 'Edit';
     record.value = { ...editRecord };
     validationErrors.value = {};
     selectedFiles.value = [];
@@ -221,7 +217,7 @@ const exportCSV = () => {
 
 const deleteSelectedRoomTypes = () => {
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-    const ids = selectedRecord.value.map((item) => record.id);
+    const ids = selectedRecord.value.map((item) => record.value.id);
     Promise.all(ids.map((id) => itemService.deleteRecord(id)))
         .then(() => {
             records.value = records.value.filter((val) => !selectedRecord.value.includes(val));
@@ -246,39 +242,39 @@ const initFilters = () => {
 
 <template>
     <Dialog v-model:visible="detailsDialog" modal header="Record Details" :style="{ width: '50vw' }">
-    <div class="p-fluid">
-        <div class="field">
-            <label class="font-bold mr-2">Name</label>
-            <span>{{ record.name }}</span>
-        </div>
-        <div class="field">
-            <label class="font-bold mr-2">Category</label>
-            <span>{{ record.category_id ?? 'Not set' }}</span>
-            <!-- <span>{{ itemCategories.value.find(type => type.id === record.category_id)?.name }}</span> -->
-        </div>
-        <div class="field">
-            <label class="font-bold mr-2">Unit price</label>
-            <span>{{ record.unit_price }}</span>
-        </div>
-        <div class="field">
-            <label class="font-bold mr-2">Reorder level</label>
-            <span>{{ record.reorder_level }}</span>
-        </div>
-        <div class="field">
-            <label class="font-bold mr-2">Description</label>
-            <span>{{ record.description }}</span>
-        </div>
-        <div class="field">
-            <label class="font-bold mr-2">Image</label>
-            <div v-if="record.image_url && record.image_url.length">
-                <img :src="image_url" alt="Item Image" class="mt-2" width="100" />
+        <div class="p-fluid">
+            <div class="field">
+                <label class="font-bold mr-2">Name</label>
+                <span>{{ record.name }}</span>
+            </div>
+            <div class="field">
+                <label class="font-bold mr-2">Category</label>
+                <span>{{ record.category_id ?? 'Not set' }}</span>
+                <!-- <span>{{ itemCategories.value.find(type => type.id === record.category_id)?.name }}</span> -->
+            </div>
+            <div class="field">
+                <label class="font-bold mr-2">Unit price</label>
+                <span>{{ record.unit_price }}</span>
+            </div>
+            <div class="field">
+                <label class="font-bold mr-2">Reorder level</label>
+                <span>{{ record.reorder_level }}</span>
+            </div>
+            <div class="field">
+                <label class="font-bold mr-2">Description</label>
+                <span>{{ record.description }}</span>
+            </div>
+            <div class="field">
+                <label class="font-bold mr-2">Image</label>
+                <div v-if="record.image_url && record.image_url.length">
+                    <img :src="image_url" alt="Item Image" class="mt-2" width="100" />
+                </div>
             </div>
         </div>
-    </div>
-    <template #footer>
-        <Button label="Close" icon="pi pi-times" @click="detailsDialog = false" class="p-button-danger" />
-    </template>
-</Dialog>
+        <template #footer>
+            <Button label="Close" icon="pi pi-times" @click="detailsDialog = false" class="p-button-danger" />
+        </template>
+    </Dialog>
 
     <div class="grid">
         <div class="col-12">
@@ -286,68 +282,57 @@ const initFilters = () => {
                 <h5 class="font-bold uppercase">
                     <span class="text-primary">{{ operation }}:</span> {{ recordTitle }}
                 </h5>
-                <hr>
+                <hr />
                 <div class="p-fluid formgrid grid">
                     <div class="field col-12 md:col-6">
                         <label for="name">Name</label>
-                        <InputText id="name" v-model="record.name" required autoFocus class="w-full"
-                            placeholder="Enter name" />
+                        <InputText id="name" v-model="record.name" required autoFocus class="w-full" placeholder="Enter name" />
                         <small v-if="validationErrors.name" class="p-error">{{ validationErrors.name }}</small>
                     </div>
                     <div class="field col-12 md:col-6">
                         <label for="category_id">Category</label>
-                        <Dropdown id="category_id" v-model="record.category_id" :options="itemCategories" optionLabel="name"
-                            optionValue="id" placeholder="Select a Category" class="w-full" />
-                        <small v-if="validationErrors.category_id" class="p-error">{{ validationErrors.category_id }}
-                        </small>
+                        <Dropdown id="category_id" v-model="record.category_id" :options="itemCategories" optionLabel="name" optionValue="id" placeholder="Select a Category" class="w-full" />
+                        <small v-if="validationErrors.category_id" class="p-error">{{ validationErrors.category_id }} </small>
                     </div>
                 </div>
                 <div class="p-fluid formgrid grid">
                     <div class="field col-12 md:col-6">
                         <label for="unit_price">Unit price</label>
-                        <InputNumber id="unit_price" v-model="record.unit_price" required class="w-full"
-                            placeholder="Enter unit price" />
+                        <InputNumber id="unit_price" v-model="record.unit_price" required class="w-full" placeholder="Enter unit price" />
                         <small v-if="validationErrors.unit_price" class="p-error">{{ validationErrors.unit_price }}</small>
                     </div>
                     <div class="field col-12 md:col-6">
                         <label for="reorder_level">Reorder level</label>
-                        <InputText id="reorder_level" v-model="record.reorder_level" required autoFocus class="w-full"
-                            placeholder="Enter reorder level" />
-                        <small v-if="validationErrors.reorder_level" class="p-error">{{ validationErrors.reorder_level
-                            }}</small>
+                        <InputText id="reorder_level" v-model="record.reorder_level" required autoFocus class="w-full" placeholder="Enter reorder level" />
+                        <small v-if="validationErrors.reorder_level" class="p-error">{{ validationErrors.reorder_level }}</small>
                     </div>
                 </div>
                 <div class="p-fluid formgrid grid">
                     <div class="field col-12 md:col-6">
                         <label for="description">Description</label>
-                        <InputText id="description" v-model="record.description" required autoFocus class="w-full"
-                            placeholder="Enter description" />
-                        <small v-if="validationErrors.description" class="p-error">{{ validationErrors.description
-                            }}</small>
+                        <InputText id="description" v-model="record.description" required autoFocus class="w-full" placeholder="Enter description" />
+                        <small v-if="validationErrors.description" class="p-error">{{ validationErrors.description }}</small>
                     </div>
                 </div>
                 <div class="p-fluid formgrid grid">
                     <div class="field col-12 md:col-12">
                         <label for="images">Image</label>
-                        <FileUpload name="image" customUpload :multiple="true" accept="image/*" :maxFileSize="1000000"
-                            @select="onSelectedFiles">
+                        <FileUpload name="image" customUpload :multiple="true" accept="image/*" :maxFileSize="1000000" @select="onSelectedFiles">
                             <template #header="{ chooseCallback, clearCallback, files }">
                                 <div class="flex flex-wrap justify-content-between align-items-center">
                                     <Button label="Choose" icon="pi pi-plus" class="mr-2" @click="chooseCallback" />
-                                    <Button label="Clear" icon="pi pi-times" class="mr-2" @click="clearCallback"
-                                        v-if="files.length" />
+                                    <Button label="Clear" icon="pi pi-times" class="mr-2" @click="clearCallback" v-if="files.length" />
                                 </div>
                             </template>
                         </FileUpload>
                         <div class="flex align-items-center gap-3 mb-3">
-
                             <div v-if="record.image && record.image.length">
                                 <img :src="image.url" alt="Existing Image" class="mt-2" width="100" />
                             </div>
                         </div>
                     </div>
                 </div>
-                <hr>
+                <hr />
                 <Button label="Cancel" icon="pi pi-times" outlined @click="hideDialog" class="p-button-danger mr-2" />
                 <Button label="Save" icon="pi pi-check" @click="saveItem" class="p-button-primary" />
             </div>
@@ -363,18 +348,27 @@ const initFilters = () => {
                     </template>
                 </Toolbar>
 
-                <DataTable ref="dt" :value="records" v-model:selection="selectedRecord" :rowHover="true"
-                    filterDisplay="menu" showGridlines dataKey="id" :paginator="true" :rows="10" :filters="filters"
+                <DataTable
+                    ref="dt"
+                    :value="records"
+                    v-model:selection="selectedRecord"
+                    :rowHover="true"
+                    filterDisplay="menu"
+                    showGridlines
+                    dataKey="id"
+                    :paginator="true"
+                    :rows="10"
+                    :filters="filters"
                     paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                     :rowsPerPageOptions="[5, 10, 25]"
-                    currentPageReportTemplate="Showing {first} to {last} of {totalRecords} items">
+                    currentPageReportTemplate="Showing {first} to {last} of {totalRecords} items"
+                >
                     <template #header>
                         <div class="flex flex-column md:flex-row md:justify-content-between md:align-items-center">
                             <h5 class="m-0 uppercase"><span class="text-primary">Manage : </span> {{ recordTitle }}s</h5>
                             <IconField iconPosition="left" class="block mt-2 md:mt-0">
                                 <InputIcon class="pi pi-search" />
-                                <InputText class="w-full sm:w-auto" v-model="filters['global'].value"
-                                    placeholder="Search..." />
+                                <InputText class="w-full sm:w-auto" v-model="filters['global'].value" placeholder="Search..." />
                             </IconField>
                         </div>
                     </template>
@@ -399,18 +393,14 @@ const initFilters = () => {
                     <Column header="Image">
                         <template #body="slotProps">
                             <span class="p-column-title">Image</span>
-                            <img :src="slotProps.data.images?.data[0]?.url || '/img/noimage.gif'"
-                                :alt="slotProps.data.name" class="shadow-2 border-round" width="50" />
+                            <img :src="slotProps.data.images?.data[0]?.url || '/img/noimage.gif'" :alt="slotProps.data.name" class="shadow-2 border-round" width="50" />
                         </template>
                     </Column>
                     <Column headerStyle="min-width:10rem;">
                         <template #body="slotProps">
-                            <Button icon="pi pi-eye" class="mr-2" severity="info" rounded
-                                @click="showDetails(slotProps.data)" />
-                            <Button icon="pi pi-pencil" class="mr-2" severity="success" rounded
-                                @click="editRecord(slotProps.data)" />
-                            <Button icon="pi pi-trash" class="mt-2" severity="warning" rounded
-                                @click="confirmDeleteRecord(slotProps.data)" />
+                            <Button icon="pi pi-eye" class="mr-2" severity="info" rounded @click="showDetails(slotProps.data)" />
+                            <Button icon="pi pi-pencil" class="mr-2" severity="success" rounded @click="editRecord(slotProps.data)" />
+                            <Button icon="pi pi-trash" class="mt-2" severity="warning" rounded @click="confirmDeleteRecord(slotProps.data)" />
                         </template>
                     </Column>
                 </DataTable>
@@ -477,18 +467,19 @@ const initFilters = () => {
                     </template>
                 </Dialog> -->
 
-                <ConfirmDialog v-model:visible="deleteRecordsDialog" header="Confirm" icon="pi pi-exclamation-triangle"
-                    acceptLabel="Yes" rejectLabel="No" acceptClass="p-button-danger" @accept="deleteSelectedRoomTypes">
+                <ConfirmDialog v-model:visible="deleteRecordsDialog" header="Confirm" icon="pi pi-exclamation-triangle" acceptLabel="Yes" rejectLabel="No" acceptClass="p-button-danger" @accept="deleteSelectedRoomTypes">
                     <template #message>
                         <p>Are you sure you want to delete the selected room types?</p>
                     </template>
                 </ConfirmDialog>
 
                 <Dialog v-model:visible="confirmDeleteModal" modal header="Confirm Delete" :style="{ width: '30rem' }">
-                    <p>Are you sure you want to delete <strong>{{ record.name }}</strong>?</p>
+                    <p>
+                        Are you sure you want to delete <strong>{{ record.name }}</strong
+                        >?
+                    </p>
                     <div class="flex justify-content-end gap-2">
-                        <Button type="button" label="No" severity="secondary"
-                            @click="confirmDeleteModal = false"></Button>
+                        <Button type="button" label="No" severity="secondary" @click="confirmDeleteModal = false"></Button>
                         <Button type="button" label="Yes" @click="confirmDeleteRecordConfirmed()"></Button>
                     </div>
                 </Dialog>
