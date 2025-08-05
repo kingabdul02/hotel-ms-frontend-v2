@@ -80,19 +80,12 @@ const handleCompletePayment = async () => {
   }
 
   try {
-    const response = await axiosInstance.post(`/admin/complete-payment`, {
+    await axiosInstance.post(`/admin/complete-payment`, {
       booking_id: localBooking.value?.booking_id,
       payment_method: selectedPaymentMethod.value
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });
-
-    // Update the local booking object immediately for instant UI feedback
-    if (localBooking.value && response.data.success) {
-      localBooking.value.payment_status = 'paid';
-      // Trigger reactivity by reassigning the object
-      localBooking.value = { ...localBooking.value };
-    }
 
     toast.add({ 
       severity: 'success', 
@@ -107,6 +100,9 @@ const handleCompletePayment = async () => {
     
     // Emit update to refresh the booking data from parent
     emits('update');
+    
+    // Close the main booking details dialog
+    emits('update:visible', false);
   } catch (error) {
     toast.add({ 
       severity: 'error', 
