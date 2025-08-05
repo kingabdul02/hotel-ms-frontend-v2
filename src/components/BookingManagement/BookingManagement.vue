@@ -2,40 +2,44 @@
 import { ref, onMounted } from 'vue';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
-import BookingsTab from './BookingsTab.vue';
-import CorporateBookingManagement from './CorporateBookingManagement.vue';
+import BookingsTab from '@/components/BookingManagement/BookingsTab.vue';
+import CorporateBookingManagement from '@/components/BookingManagement/CorporateBookingManagement.vue';
 import { useBooking } from '@/composables/useBooking';
 
 // Initialize useBooking composable
 const { statisticsBooking } = useBooking();
 
-const activeTab = ref(0);
+const activeTabIndex = ref(0);
 
-// Fetch booking statistics on component mount
-onMounted(() => {
-  statisticsBooking();
+const statistics = ref({
+  recentBookingsCount: 0,
+  availableRoomCount: 0,
+  checkInsToday: 0,
+  checkOutsToday: 0
+});
+
+onMounted(async () => {
+  try {
+    const stats = await statisticsBooking();
+    statistics.value = {
+      recentBookingsCount: stats.recentBookingsCount || 0,
+      availableRoomCount: stats.availableRoomCount || 0,
+      checkInsToday: stats.checkInsToday || 0,
+      checkOutsToday: stats.checkOutsToday || 0
+    };
+  } catch (error) {
+    console.error('Failed to fetch booking statistics:', error);
+  }
 });
 </script>
 
 <template>
-  <div class="booking-management-container">
-    <TabView v-model:activeIndex="activeTab" class="main-tabview">
-      <TabPanel>
-        <template #header>
-          <div class="tab-header">
-            <i class="pi pi-calendar-check text-primary"></i>
-            <span class="ml-2 tab-title">Individual Bookings</span>
-          </div>
-        </template>
-        <BookingsTab />
+  <div>
+    <TabView v-model:activeIndex="activeTabIndex">
+      <TabPanel header="Individual Booking">
+        <BookingsTab :statisticsData="statistics" />
       </TabPanel>
-      <TabPanel>
-        <template #header>
-          <div class="tab-header">
-            <i class="pi pi-building text-primary"></i>
-            <span class="ml-2 tab-title">Corporate Bookings</span>
-          </div>
-        </template>
+      <TabPanel header="Corporate Booking">
         <CorporateBookingManagement />
       </TabPanel>
     </TabView>
@@ -43,5 +47,5 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@import '@/styles/booking-management.css';
+/* Add any necessary styles here */
 </style>

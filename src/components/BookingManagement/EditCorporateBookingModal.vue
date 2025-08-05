@@ -92,6 +92,36 @@
           </div>
           <Button label="Add Guest" icon="pi pi-plus" class="p-button-outlined p-button-success" :disabled="!canAddGuest" @click="handleAddGuest" />
         </section>
+
+        <!-- Hall Details -->
+        <section class="form-section">
+          <h3>Hall Details</h3>
+          <div v-for="(hall, index) in localBooking.halls" :key="hall.id || `hall-${index}`" class="guest-section">
+            <div class="guest-header">
+              <h4>Hall {{ index + 1 }}</h4>
+              <Button icon="pi pi-trash" class="p-button-danger p-button-text" @click="handleRemoveHall(index)" />
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Hall</label>
+                <Dropdown v-model="hall.hall_id" :options="availableHalls" optionLabel="name" optionValue="id" placeholder="Select a Hall" @change="updateHallAmount(index)" />
+              </div>
+              <div class="form-group">
+                <label>Start Date</label>
+                <Calendar v-model="hall.start_date" showIcon dateFormat="yy-mm-dd" @date-select="updateHallAmount(index)" />
+              </div>
+              <div class="form-group">
+                <label>End Date</label>
+                <Calendar v-model="hall.end_date" showIcon dateFormat="yy-mm-dd" @date-select="updateHallAmount(index)" />
+              </div>
+              <div class="form-group">
+                <label>Amount</label>
+                <InputNumber v-model="hall.amount" mode="currency" currency="NGN" locale="en-NG" :disabled="true" />
+              </div>
+            </div>
+          </div>
+          <Button label="Add Hall" icon="pi pi-plus" class="p-button-outlined p-button-success" @click="handleAddHall" />
+        </section>
       </div>
 
       <template #footer>
@@ -127,7 +157,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible', 'booking-updated']);
 
-const { updateCorporateBooking, availableRooms, fetchAvailableRooms } = useCorporateBooking();
+const { updateCorporateBooking, availableRooms, fetchAvailableRooms, availableHalls, fetchAvailableHalls } = useCorporateBooking();
 const toast = useToast();
 const confirm = useConfirm();
 
@@ -138,14 +168,37 @@ const showModal = computed({
   set: (value) => emit('update:visible', value),
 });
 
+const formatDateForInput = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 watch(
   () => props.booking,
   (newBooking) => {
     if (newBooking) {
-      localBooking.value = JSON.parse(JSON.stringify(newBooking));
-      if (localBooking.value.check_in_date && localBooking.value.check_out_date) {
-        fetchAvailableRooms(localBooking.value.check_in_date, localBooking.value.check_out_date);
+      const bookingCopy = JSON.parse(JSON.stringify(newBooking));
+      
+      bookingCopy.check_in_date = formatDateForInput(bookingCopy.check_in_date);
+      bookingCopy.check_out_date = formatDateForInput(bookingCopy.check_out_date);
+
+      if (bookingCopy.halls) {
+        bookingCopy.halls.forEach(hall => {
+          hall.start_date = formatDateForInput(hall.start_date);
+          hall.end_date = formatDateForInput(hall.end_date);
+        });
       }
+      
+      localBooking.value = bookingCopy;
+
+      if (localBooking.value.check_in_date && localBooking.value.check_out_date) {
+        fetchAvailableRooms(localBooking.value.check_in_date, localBooking.value.check_out_date, localBooking.value.id);
+      }
+      fetchAvailableHalls();
     } else {
       localBooking.value = null;
     }
@@ -183,6 +236,37 @@ const handleAddGuest = () => {
     is_checked_in: false,
     is_checked_out: false,
   });
+};
+
+const handleAddHall = () => {
+  if (!localBooking.value.halls) {
+    localBooking.value.halls = [];
+  }
+  localBooking.value.halls.push({
+    id: `new-hall-${Date.now()}`,
+    hall_id: null,
+    start_date: '',
+    end_date: '',
+    amount: 0,
+  });
+};
+
+const handleRemoveHall = (index) => {
+  localBooking.value.halls.splice(index, 1);
+  toast.add({ severity: 'success', summary: 'Hall Removed', detail: 'Hall has been removed.', life: 3000 });
+};
+
+const updateHallAmount = (index) => {
+  const hall = localBooking.value.halls[index];
+  if (hall.hall_id && hall.start_date && hall.end_date) {
+    const hallInfo = availableHalls.value.find(h => h.id === hall.hall_id);
+    if (hallInfo) {
+      const startDate = new Date(hall.start_date);
+      const endDate = new Date(hall.end_date);
+      const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) || 1;
+      hall.amount = days * hallInfo.price;
+    }
+  }
 };
 
 const handleRemoveGuest = (index) => {
@@ -262,7 +346,7 @@ watchEffect(() => {
     if (checkIn >= checkOut) {
         toast.add({ severity: 'warn', summary: 'Invalid Dates', detail: 'Check-out date must be after check-in date.', life: 3000 });
     } else {
-        fetchAvailableRooms(localBooking.value.check_in_date, localBooking.value.check_out_date);
+        fetchAvailableRooms(localBooking.value.check_in_date, localBooking.value.check_out_date, localBooking.value.id);
     }
   }
 });

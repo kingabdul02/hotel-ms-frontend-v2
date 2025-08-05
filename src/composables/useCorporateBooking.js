@@ -118,7 +118,7 @@ export function useCorporateBooking() {
     }
   };
 
-  const updateCorporateBooking = async (bookingId, formData) => {
+      const updateCorporateBooking = async (bookingId, formData) => {
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
@@ -144,27 +144,36 @@ export function useCorporateBooking() {
     }
   };
 
-          const fetchAvailableRooms = async (check_in_date, check_out_date) => {
+  const fetchAvailableRooms = async (check_in_date, check_out_date, bookingId = null) => {
     if (!check_in_date || !check_out_date) return;
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
+    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
-      const response = await axiosInstance.get('/rooms', {
-        params: {
-          check_in_date: check_in_date,
-          check_out_date: check_out_date
-        },
+      const params = {
+        check_in_date,
+        check_out_date
+      };
+      if (bookingId) {
+        params.booking_id = bookingId;
+      }
+      const response = await axiosInstance.get('/admin/available-rooms', {
         headers: { Authorization: `Bearer ${token}` },
+        params
       });
-      availableRooms.value = response.data?.data || [];
+      availableRooms.value = response.data.data;
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch available rooms', life: 3000 });
+      console.error('Error fetching available rooms:', error);
+    } finally {
+      store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
     }
   };
 
   const fetchAvailableHalls = async () => {
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
+    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
       const response = await axiosInstance.get('/halls', {
         headers: { Authorization: `Bearer ${token}` },
@@ -172,6 +181,8 @@ export function useCorporateBooking() {
       availableHalls.value = response.data?.data || [];
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch available halls', life: 3000 });
+    } finally {
+      store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
     }
   };
 
