@@ -346,7 +346,7 @@ export function useCorporateBooking() {
     const token = userData?.token;
     try {
       store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-      await axiosInstance.put(`/admin/corporate-booking/guest/${guest.id}/check-in`, {}, {
+      await axiosInstance.post(`/admin/corporate-booking/guest/${guest.id}/check-in`, {}, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.add({ severity: 'success', summary: 'Success', detail: `${guest.full_name} has been checked in successfully`, life: 3000 });
@@ -364,7 +364,7 @@ export function useCorporateBooking() {
     const token = userData?.token;
     try {
       store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-      await axiosInstance.put(`/admin/corporate-booking/guest/${guest.id}/check-out`, {}, {
+      await axiosInstance.post(`/admin/corporate-booking/guest/${guest.id}/check-out`, {}, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.add({ severity: 'success', summary: 'Success', detail: `${guest.full_name} has been checked out successfully`, life: 3000 });

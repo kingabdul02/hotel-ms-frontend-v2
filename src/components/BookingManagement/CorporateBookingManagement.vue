@@ -416,7 +416,7 @@ watch(searchQuery, handleSearch, { debounce: 500 });
                 </div>
               </template>
             </Column>
-            <Column header="Status" sortable>
+            <Column header="Booking Status" sortable>
               <template #body="slotProps">
                 <Tag
                   :value="getBookingStatus(slotProps.data)"
