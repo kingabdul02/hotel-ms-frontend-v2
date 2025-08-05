@@ -157,7 +157,7 @@ export function useCorporateBooking() {
       if (bookingId) {
         params.booking_id = bookingId;
       }
-      const response = await axiosInstance.get('/admin/available-rooms', {
+      const response = await axiosInstance.get('/room/search', {
         headers: { Authorization: `Bearer ${token}` },
         params
       });

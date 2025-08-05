@@ -279,7 +279,20 @@ const validateNin = (nin: string | undefined) => {
   return ninRegex.test(nin);
 };
 
-watch([() => corporateBookingForm.check_in_date, () => corporateBookingForm.check_out_date], fetchAvailableRooms);
+// Format date for API (convert Date object to YYYY-MM-DD string)
+const formatDateForAPI = (date: Date | string | null) => {
+  if (!date) return null;
+  if (typeof date === 'string') return date;
+  return date.toISOString().split('T')[0];
+};
+
+watch([() => corporateBookingForm.check_in_date, () => corporateBookingForm.check_out_date], ([checkInDate, checkOutDate]) => {
+  const formattedCheckIn = formatDateForAPI(checkInDate);
+  const formattedCheckOut = formatDateForAPI(checkOutDate);
+  if (formattedCheckIn && formattedCheckOut) {
+    fetchAvailableRooms(formattedCheckIn, formattedCheckOut, bookingIdToEdit.value);
+  }
+});
 
 onMounted(() => {
   fetchCompanies();

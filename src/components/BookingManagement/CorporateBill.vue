@@ -15,7 +15,11 @@ import Chip from 'primevue/chip'
 import Message from 'primevue/message'
 import Panel from 'primevue/panel'
 import ConfirmDialog from 'primevue/confirmdialog'
+import Dialog from 'primevue/dialog'
+import Dropdown from 'primevue/dropdown'
 import { useConfirm } from 'primevue/useconfirm'
+import axiosInstance from '@/service/AxiosInstance'
+import { formatCurrency } from '@/utils/currencyFormatter'
 
 // Interfaces
 interface GuestSummary {
@@ -41,6 +45,7 @@ interface Bill {
   meal_plan: MealPlan | null
   total_accommodation: number
   grand_total: number
+  payment_status: string
 }
 
 // Composable
@@ -80,6 +85,18 @@ const formattedTotal = computed(() =>
 )
 
 const totalGuests = computed(() => bill.value?.guests.length || 0)
+
+const isPaid = computed(() => bill.value?.payment_status === 'paid')
+
+// Payment dialog state
+const showPaymentDialog = ref(false);
+const selectedPaymentMethod = ref('');
+const paymentMethods = [
+  { label: 'Cash', value: 'cash' },
+  { label: 'POS', value: 'pos' },
+  { label: 'Transfer', value: 'transfer' }
+];
+
 
 const averageRatePerNight = computed(() => {
   if (!bill.value || bill.value.guests.length === 0) return 0
@@ -444,6 +461,63 @@ const getInitials = (name: string) => {
   return name.split(' ').map(n => n[0]).join('').toUpperCase()
 }
 
+// Handle payment completion
+const handleCompletePayment = async () => {
+  if (!selectedPaymentMethod.value) {
+    toast.add({ 
+      severity: 'warn', 
+      summary: 'Warning', 
+      detail: 'Please select a payment method', 
+      life: 3000 
+    });
+    return;
+  }
+
+  const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+  const token = userData?.token;
+
+  if (!token) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: 'Authentication token missing', 
+      life: 3000 
+    });
+    return;
+  }
+
+  try {
+    await axiosInstance.post(`/admin/complete-corporate-payment`, {
+      reservation_code: reservationCode.value,
+      payment_method: selectedPaymentMethod.value
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Success', 
+      detail: 'Payment completed successfully', 
+      life: 3000 
+    });
+
+    // Close the payment dialog
+    showPaymentDialog.value = false;
+    selectedPaymentMethod.value = '';
+    
+    // Refresh the bill to get updated payment status
+    await refreshBill();
+    
+  } catch (error: any) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: error.response?.data?.message || 'Failed to complete payment', 
+      life: 3000 
+    });
+  }
+};
+
 // Lifecycle
 onMounted(async () => {
   const code = reservationCode.value
@@ -501,6 +575,13 @@ onMounted(async () => {
           </div>
         </div>
         <div class="header-actions print:hidden">
+          <Button
+                v-if="!isPaid"
+                label="Make Payment"
+                icon="pi pi-money-bill"
+                class="p-button-info mr-2"
+                @click="showPaymentDialog = true"
+              />
           <Button
             label="Refresh"
             icon="pi pi-refresh"
@@ -764,6 +845,57 @@ onMounted(async () => {
     
     <!-- Confirmation Dialog -->
     <ConfirmDialog />
+
+    <!-- Payment Dialog -->
+  <Dialog
+    :visible="showPaymentDialog"
+    header="Complete Payment"
+    :modal="true"
+    :style="{ width: '30vw' }"
+    @update:visible="showPaymentDialog = $event"
+  >
+    <div class="payment-dialog-content">
+      <div class="mb-4">
+        <p class="text-600 mb-3">
+          Complete payment for this booking. Please select a payment method:
+        </p>
+        <div class="mb-3 p-3 surface-100 border-round">
+          <div class="flex justify-content-between align-items-center">
+            <span class="font-semibold">Total Amount:</span>
+            <span class="text-xl font-bold text-primary">{{ formatCurrency(bill?.grand_total || 0) }}</span>
+          </div>
+        </div>
+        <div class="flex flex-column gap-3">
+          <label for="payment-method" class="font-semibold">Payment Method</label>
+          <Dropdown
+            id="payment-method"
+            v-model="selectedPaymentMethod"
+            :options="paymentMethods"
+            option-label="label"
+            option-value="value"
+            placeholder="Select payment method"
+            class="w-full"
+          />
+        </div>
+      </div>
+    </div>
+    <template #footer>
+      <div class="flex gap-2">
+        <Button
+          label="Cancel"
+          icon="pi pi-times"
+          text
+          @click="showPaymentDialog = false; selectedPaymentMethod = ''"
+        />
+        <Button
+          label="Complete Payment"
+          icon="pi pi-check"
+          :disabled="!selectedPaymentMethod"
+          @click="handleCompletePayment"
+        />
+      </div>
+    </template>
+  </Dialog>
   </div>
 </template>
 
