@@ -81,7 +81,7 @@ const formattedCheckOut = computed(() =>
 )
 
 const formattedTotal = computed(() =>
-  bill.value ? `$${bill.value.grand_total.toFixed(2)}` : '$0.00'
+  bill.value ? `₦${bill.value.grand_total.toFixed(2)}` : '₦0.00'
 )
 
 const totalGuests = computed(() => bill.value?.guests.length || 0)
