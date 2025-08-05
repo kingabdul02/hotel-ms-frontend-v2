@@ -266,10 +266,35 @@ const openReservationDialog = () => {
           }}</template>
         </Column>
 
-        <Column header="Status">
+        <Column header="Booking Status">
           <template #body="{ data }">
             <Tag
-              :value="data.payment_status"
+              :value="
+          data.is_checked_out
+            ? 'Checked Out'
+            : data.is_checked_in
+            ? 'Checked In'
+            : data.is_confirmed
+            ? 'Confirmed'
+            : 'Pending'
+              "
+              :severity="
+          data.is_checked_out
+            ? 'info'
+            : data.is_checked_in
+            ? 'success'
+            : data.is_confirmed
+            ? 'success'
+            : 'warning'
+              "
+            />
+          </template>
+        </Column>
+
+        <Column header="Payment Status">
+          <template #body="{ data }">
+            <Tag
+                :value="data.payment_status.charAt(0).toUpperCase() + data.payment_status.slice(1).toLowerCase()"
               :severity="data.payment_status === 'paid' ? 'success' : 'warning'"
             />
           </template>
