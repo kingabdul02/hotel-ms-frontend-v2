@@ -16,6 +16,7 @@ import { useRouter } from 'vue-router';
 import StatisticsCards from './StatisticsCards.vue';
 import EditCorporateBookingModal from './EditCorporateBookingModal.vue';
 import CorporateBookingForm from './CorporateBookingForm.vue';
+import GuestBill from './GuestBill.vue';
 
 
 // Types
@@ -93,6 +94,10 @@ const isSearching = ref(false);
 const showEditModal = ref(false);
 const selectedBookingForEdit = ref(null);
 const showCreateModal = ref(false);
+const showBillDialog = ref(false);
+const selectedBookingForBill = ref(null);
+const selectedGuestForBill = ref(null);
+const billContent = ref(null);
 
 // Constants
 const STATUS_OPTIONS = [
@@ -195,11 +200,41 @@ const handleBookingUpdated = async () => {
   await fetchCorporateBookings();
 };
 
+const openGuestBill = (guest, booking) => {
+  selectedGuestForBill.value = guest;
+  selectedBookingForBill.value = booking;
+  showBillDialog.value = true;
+};
+
 const viewBill = (booking: CorporateBooking) => {
   router.push({
     name: 'CorporateBill',
     params: { reservation_code: booking.reservation_code },
   });
+};
+
+const printBill = () => {
+  const billElement = billContent.value?.$el;
+  if (billElement) {
+    const printWindow = window.open('', 'PRINT', 'height=800,width=900');
+    printWindow.document.write('<html><head><title>Guest Bill</title>');
+
+    const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
+    styles.forEach(style => {
+      printWindow.document.head.appendChild(style.cloneNode(true));
+    });
+
+    printWindow.document.write('</head><body>');
+    printWindow.document.write(billElement.innerHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  }
 };
 
 // Utility functions
@@ -503,6 +538,14 @@ watch(searchQuery, handleSearch, { debounce: 500 });
                         @click="showGuestDetails(guest)"
                         :aria-label="`View details for ${guest.full_name}`"
                       />
+                      <Button
+                        icon="pi pi-file"
+                        size="small"
+                        outlined
+                        severity="info"
+                        @click="openGuestBill(guest, slotProps.data)"
+                        :aria-label="`View bill for ${guest.full_name}`"
+                      />
                     </div>
                     <div v-if="guest.checked_in_at || guest.checked_out_at" class="guest-timestamps">
                       <div v-if="guest.checked_in_at" class="timestamp">
@@ -635,6 +678,35 @@ watch(searchQuery, handleSearch, { debounce: 500 });
           text
           @click="closeGuestDialog"
           aria-label="Close guest details dialog"
+        />
+      </template>
+    </Dialog>
+
+    <Dialog
+      v-model:visible="showBillDialog"
+      :style="{ width: '90vw', maxWidth: '800px' }"
+      header="Guest Bill"
+      :modal="true"
+      class="guest-bill-dialog"
+    >
+      <GuestBill
+        v-if="selectedGuestForBill && selectedBookingForBill"
+        :guest="selectedGuestForBill"
+        :booking="selectedBookingForBill"
+        ref="billContent"
+      />
+      <template #footer>
+        <Button
+          label="Print"
+          icon="pi pi-print"
+          @click="printBill"
+          class="p-button-success"
+        />
+        <Button
+          label="Close"
+          icon="pi pi-times"
+          text
+          @click="showBillDialog = false"
         />
       </template>
     </Dialog>
