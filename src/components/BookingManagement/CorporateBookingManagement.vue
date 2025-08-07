@@ -7,6 +7,7 @@ import Column from 'primevue/column';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Dropdown from 'primevue/dropdown';
+import Calendar from 'primevue/calendar';
 import ProgressSpinner from 'primevue/progressspinner';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
@@ -19,7 +20,25 @@ import CorporateBookingForm from './CorporateBookingForm.vue';
 import GuestBill from './GuestBill.vue';
 
 
-// Types
+// Constants
+const bookingStatusOptions = [
+  { label: 'All', value: null },
+  { label: 'Pending', value: 'confirmed' },
+  { label: 'Checked-In', value: 'checked_in' },
+  { label: 'Checked Out', value: 'checked_out' },
+  { label: 'Cancelled', value: 'cancelled' },
+  { label: 'Not Showed', value: 'not_showed' },
+];
+
+const paymentStatusOptions = [
+  { label: 'All Payment Status', value: '' },
+  { label: 'Paid', value: 'paid' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Failed', value: 'failed' },
+  { label: 'Refunded', value: 'refunded' },
+  { label: 'Cancelled', value: 'cancelled' },
+];
+
 interface Guest {
   id: string;
   full_name: string;
@@ -52,10 +71,16 @@ interface CorporateBooking {
   coordinator?: {
     full_name: string;
   };
+  company?: {
+    name: string;
+  };
   guests: Guest[];
   check_in_date: string;
   check_out_date: string;
+  booking_date?: string;
+  created_at?: string;
   reservation_code: string;
+  payment_status?: string;
 }
 
 // Composable
@@ -65,6 +90,10 @@ const {
   totalRecords,
   searchQuery,
   selectedStatus,
+  selectedPaymentStatus,
+  filterDateRange,
+  filterCheckoutRange,
+  filterBookingDateRange,
   fetchCorporateBookings,
   getBookingStatus,
   getBookingStatusSeverity,
@@ -75,6 +104,8 @@ const {
   getTotalGuestsCount,
   confirmCheckIn,
   confirmCheckOut,
+  confirmBookingCheckIn,
+  confirmBookingCheckOut,
   resetCorporateBookingForm,
   fetchBookingById,
   fetchCompanies,
@@ -98,21 +129,42 @@ const showBillDialog = ref(false);
 const selectedBookingForBill = ref(null);
 const selectedGuestForBill = ref(null);
 const billContent = ref(null);
-
-// Constants
-const STATUS_OPTIONS = [
-  { label: 'All Status', value: '' },
-  { label: 'Pending', value: 'pending' },
-  { label: 'In Progress', value: 'in_progress' },
-  { label: 'Completed', value: 'completed' },
-] as const;
+const rows = ref(10); // pagination rows per page
 
 const ITEMS_PER_PAGE = 10;
 
+// Helper functions for date formatting
+const apiDate = (d: Date | undefined) => {
+  if (!d) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const buildFilters = () => ({
+  check_in_from: apiDate(filterDateRange.value[0]),
+  check_in_to: apiDate(filterDateRange.value[1]),
+  check_out_from: apiDate(filterCheckoutRange.value[0]),
+  check_out_to: apiDate(filterCheckoutRange.value[1]),
+  booking_from: apiDate(filterBookingDateRange.value[0]),
+  booking_to: apiDate(filterBookingDateRange.value[1]),
+});
+
 // Computed properties
 const hasBookings = computed(() => corporateBookings.value.length > 0);
-const isEmptyState = computed(() => !loading.value && !hasBookings.value && !searchQuery.value);
-const isNoSearchResults = computed(() => !loading.value && !hasBookings.value && searchQuery.value);
+const isEmptyState = computed(() => {
+  return !loading.value && corporateBookings.value.length === 0 && 
+         !searchQuery.value.trim() && !selectedStatus.value && !selectedPaymentStatus.value &&
+         !filterDateRange.value?.length && !filterCheckoutRange.value?.length && 
+         !filterBookingDateRange.value?.length;
+});
+const isNoSearchResults = computed(() => {
+  return !loading.value && corporateBookings.value.length === 0 && 
+         (searchQuery.value.trim() || selectedStatus.value || selectedPaymentStatus.value ||
+          filterDateRange.value?.length || filterCheckoutRange.value?.length || 
+          filterBookingDateRange.value?.length);
+});
 
 const statisticsData = computed(() => ({
   recentBookingsCount: corporateBookings.value.length,
@@ -129,14 +181,33 @@ const handleSearch = async () => {
   if (isSearching.value) return;
   isSearching.value = true;
   try {
-    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
+    await fetchCorporateBookings({ first: 0, rows: rows.value, page: 1 }, buildFilters());
   } finally {
     isSearching.value = false;
   }
 };
 
 const handleStatusChange = async () => {
-  await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
+  await fetchCorporateBookings({ first: 0, rows: rows.value, page: 1 }, buildFilters());
+};
+
+const handlePaymentStatusChange = async () => {
+  await fetchCorporateBookings({ first: 0, rows: rows.value, page: 1 }, buildFilters());
+};
+
+const onPage = async (event: any) => {
+  rows.value = event.rows;
+  await fetchCorporateBookings({ first: event.first, rows: event.rows, page: event.page + 1 }, buildFilters());
+};
+
+const resetFilters = () => {
+  searchQuery.value = '';
+  selectedStatus.value = '';
+  selectedPaymentStatus.value = '';
+  filterDateRange.value = [];
+  filterCheckoutRange.value = [];
+  filterBookingDateRange.value = [];
+  fetchCorporateBookings({ first: 0, rows: rows.value, page: 1 }, buildFilters());
 };
 
 const showGuestDetails = (guest: Guest) => {
@@ -157,22 +228,20 @@ const handleRowCollapse = () => {
   expandedRows.value = [];
 };
 
-const handleCheckIn = async (guest: Guest) => {
-  try {
-    await confirmCheckIn(guest);
-    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
-  } catch (error) {
-    console.error('Check-in failed:', error);
-  }
+const handleCheckIn = (guest: Guest) => {
+  confirmCheckIn(guest);
 };
 
-const handleCheckOut = async (guest: Guest) => {
-  try {
-    await confirmCheckOut(guest);
-    await fetchCorporateBookings({ first: 0, rows: ITEMS_PER_PAGE, page: 1 });
-  } catch (error) {
-    console.error('Check-out failed:', error);
-  }
+const handleCheckOut = (guest: Guest) => {
+  confirmCheckOut(guest);
+};
+
+const handleBookingCheckIn = (booking: CorporateBooking) => {
+  confirmBookingCheckIn(booking);
+};
+
+const handleBookingCheckOut = (booking: CorporateBooking) => {
+  confirmBookingCheckOut(booking);
 };
 
 const openCreateBookingDialog = () => {
@@ -192,12 +261,12 @@ const openEditBookingDialog = async (booking: CorporateBooking) => {
 
 const handleBookingCreation = async () => {
   showCreateModal.value = false;
-  await fetchCorporateBookings();
+  await fetchCorporateBookings({ first: 0, rows: rows.value, page: 1 }, buildFilters());
 };
 
 const handleBookingUpdated = async () => {
   showEditModal.value = false;
-  await fetchCorporateBookings();
+  await fetchCorporateBookings({ first: 0, rows: rows.value, page: 1 }, buildFilters());
 };
 
 const openGuestBill = (guest, booking) => {
@@ -270,14 +339,74 @@ const getGuestCountText = (count: number): string => {
   return `${count} guest${count !== 1 ? 's' : ''}`;
 };
 
+const getPaymentStatus = (booking: CorporateBooking): string => {
+  // Return payment status text based on booking data
+  const status = booking.payment_status || 'pending';
+  switch (status) {
+    case 'paid': return 'Paid';
+    case 'partial': return 'Partial';
+    case 'refunded': return 'Refunded';
+    case 'failed': return 'Failed';
+    case 'pending':
+    default: return 'Pending';
+  }
+};
+
+const getPaymentStatusSeverity = (booking: CorporateBooking): string => {
+  // Return payment status severity for styling
+  const status = booking.payment_status || 'pending';
+  switch (status) {
+    case 'paid': return 'success';
+    case 'partial': return 'warning';
+    case 'refunded': return 'info';
+    case 'failed': return 'danger';
+    case 'pending':
+    default: return 'warning';
+  }
+};
+
+// Helper functions for booking check-in/out status
+const canBookingCheckIn = (booking: CorporateBooking): boolean => {
+  // Can check in if all guests are not checked in and not checked out
+  return booking.guests.some(guest => !guest.is_checked_in && !guest.is_checked_out);
+};
+
+const canBookingCheckOut = (booking: CorporateBooking): boolean => {
+  // Can check out if some guests are checked in but not all are checked out
+  return booking.guests.some(guest => guest.is_checked_in && !guest.is_checked_out);
+};
+
+const isBookingCompleted = (booking: CorporateBooking): boolean => {
+  // Booking is completed if all guests are checked out
+  return booking.guests.length > 0 && booking.guests.every(guest => guest.is_checked_out);
+};
+
 // Lifecycle
 onMounted(async () => {
-  await fetchCorporateBookings();
+  await fetchCorporateBookings({ first: 0, rows: rows.value, page: 1 }, buildFilters());
   await fetchCompanies();
 });
 
 // Watchers
 watch(searchQuery, handleSearch, { debounce: 500 });
+watch(selectedStatus, handleStatusChange);
+watch(selectedPaymentStatus, handlePaymentStatusChange);
+watch(
+  [filterDateRange, filterCheckoutRange, filterBookingDateRange],
+  () => {
+    // Only fetch if date ranges are valid (empty or have both start and end dates)
+    const checkInRange = filterDateRange.value;
+    const checkOutRange = filterCheckoutRange.value;
+    const bookingDateRange = filterBookingDateRange.value;
+    
+    const isValidRange = (range: Date[]) => range.length === 0 || range.length === 2;
+    
+    if (isValidRange(checkInRange) && isValidRange(checkOutRange) && isValidRange(bookingDateRange)) {
+      fetchCorporateBookings({ first: 0, rows: rows.value, page: 1 }, buildFilters());
+    }
+  },
+  { deep: true }
+);
 </script>
 
 <template>
@@ -287,48 +416,117 @@ watch(searchQuery, handleSearch, { debounce: 500 });
 
     <!-- Main Content Card -->
     <Card class="bookings-table-card">
-      <template #title>
+            <template #title>
         <div class="card-header">
           <div class="title-section">
-            <i class="pi pi-list text-primary" aria-hidden="true"></i>
+            <i class="pi pi-building text-primary"></i>
             <h2>Corporate Bookings</h2>
+            <span class="total-count">({{ totalRecords }} total)</span>
           </div>
           <div class="header-actions">
-            <span class="total-count" v-if="totalRecords > 0">
-              {{ totalRecords }} total bookings
-            </span>
             <Button
-              label="Create Booking"
+              label="New Corporate Booking"
               icon="pi pi-plus"
-              class="p-button-success p-button-sm"
+              class="p-button-success"
               @click="openCreateBookingDialog"
-              aria-label="Create new corporate booking"
             />
           </div>
         </div>
       </template>
 
-      <template #content>
+            <template #content>
+        <!-- Search and Filter Controls -->
+        <div class="table-controls">
+          <div class="search-section">
+            <div class="search-wrapper">
+              <InputText
+                v-model="searchQuery"
+                placeholder="Search bookings..."
+                class="search-input w-full"
+              />
+            </div>
+          </div>
+          <div class="filter-section">
+            <Dropdown
+              v-model="selectedStatus"
+              :options="bookingStatusOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Filter by Booking Status"
+              class="status-dropdown"
+              showClear
+            />
+            <Dropdown
+              v-model="selectedPaymentStatus"
+              :options="paymentStatusOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Filter by Payment Status"
+              class="status-dropdown"
+              showClear
+            />
+          </div>
+        </div>
+
+        <!-- Date Filter Row -->
+        <div class="flex flex-column md:flex-row gap-3 mb-3">
+          <Calendar
+            v-model="filterDateRange"
+            selectionMode="range"
+            dateFormat="yy-mm-dd"
+            showIcon
+            placeholder="Check-in date range"
+            class="w-full md:w-16rem"
+            :manualInput="false"
+            :showButtonBar="true"
+          />
+          <Calendar
+            v-model="filterCheckoutRange"
+            selectionMode="range"
+            dateFormat="yy-mm-dd"
+            showIcon
+            placeholder="Check-out date range"
+            class="w-full md:w-16rem"
+            :manualInput="false"
+            :showButtonBar="true"
+          />
+          <Calendar
+            v-model="filterBookingDateRange"
+            selectionMode="range"
+            dateFormat="yy-mm-dd"
+            showIcon
+            placeholder="Booking date range"
+            class="w-full md:w-16rem"
+            :manualInput="false"
+            :showButtonBar="true"
+          />
+          <Button
+            icon="pi pi-filter-slash"
+            label="Reset Filters"
+            @click="resetFilters"
+            class="p-button-secondary md:ml-auto"
+          />
+        </div>
+
         <!-- Loading State -->
         <div v-if="loading" class="loading-container">
           <div class="loading-content">
-            <ProgressSpinner style="width: 50px; height: 50px" />
-            <p class="loading-text">Loading bookings...</p>
+            <ProgressSpinner />
+            <p class="loading-text">Loading corporate bookings...</p>
           </div>
         </div>
 
         <!-- Empty State -->
         <div v-else-if="isEmptyState" class="empty-state">
           <div class="empty-content">
-            <i class="pi pi-calendar empty-icon" aria-hidden="true"></i>
-            <h3>No bookings yet</h3>
-            <p>Corporate bookings will appear here once they are created.</p>
-            <Button 
-              label="Create Booking" 
+            <i class="pi pi-building empty-icon"></i>
+            <h3>No Corporate Bookings</h3>
+            <p>Get started by creating your first corporate booking.</p>
+            <Button
+              label="Create Corporate Booking"
               icon="pi pi-plus"
               class="p-button-success"
               @click="openCreateBookingDialog"
-              aria-label="Create new corporate booking"
             />
           </div>
         </div>
@@ -336,224 +534,236 @@ watch(searchQuery, handleSearch, { debounce: 500 });
         <!-- No Search Results -->
         <div v-else-if="isNoSearchResults" class="empty-state">
           <div class="empty-content">
-            <i class="pi pi-search empty-icon" aria-hidden="true"></i>
-            <h3>No results found</h3>
+            <i class="pi pi-search empty-icon"></i>
+            <h3>No Results Found</h3>
             <p>Try adjusting your search criteria or filters.</p>
-            <Button 
-              label="Clear Search" 
-              icon="pi pi-times"
-              class="p-button-text"
-              @click="searchQuery = ''"
-              aria-label="Clear search"
+            <Button
+              label="Clear Filters"
+              icon="pi pi-filter-slash"
+              class="p-button-outlined"
+              @click="resetFilters"
             />
           </div>
         </div>
 
         <!-- Data Table -->
         <div v-else class="table-container">
-          <!-- Search and Filter Controls -->
-          <div class="table-controls">
-            <div class="search-section">
-              <div class="p-input-icon-left search-wrapper">
-                <i class="pi pi-search" :class="{ 'pi-spin': isSearching }" aria-hidden="true"></i>
-                <InputText
-                  v-model="searchQuery"
-                  placeholder="Search by coordinator or guest name..."
-                  class="search-input"
-                  :disabled="loading"
-                  aria-label="Search bookings"
-                />
-              </div>
-            </div>
-            
-            <div class="filter-section">
-              <Dropdown
-                v-model="selectedStatus"
-                :options="STATUS_OPTIONS"
-                option-label="label"
-                option-value="value"
-                placeholder="Filter by status"
-                class="status-dropdown"
-                :disabled="loading"
-                @change="handleStatusChange"
-                aria-label="Filter by booking status"
-              >
-                <template #value="slotProps">
-                  <div class="dropdown-value">
-                    <i class="pi pi-filter" aria-hidden="true"></i>
-                    <span>{{ 
-                      slotProps.value 
-                        ? STATUS_OPTIONS.find(opt => opt.value === slotProps.value)?.label 
-                        : 'All Status' 
-                    }}</span>
-                  </div>
-                </template>
-              </Dropdown>
-            </div>
-          </div>
-
-          <!-- Data Table -->
           <DataTable
             :value="corporateBookings"
-            :rows="ITEMS_PER_PAGE"
-            :paginator="true"
-            responsive-layout="scroll"
+            :rows="rows"
+            :rowsPerPageOptions="[10, 20, 50, 100]"
+            :totalRecords="totalRecords"
+            :first="0"
+            lazy
+            paginator
+            @page="onPage"
+            v-model:expandedRows="expandedRows"
+            @rowExpand="handleRowExpand"
+            @rowCollapse="handleRowCollapse"
             class="custom-datatable"
-            paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
-            current-page-report-template="Showing {first} to {last} of {totalRecords} bookings"
-            :expanded-rows="expandedRows"
-            @row-expand="handleRowExpand"
-            @row-collapse="handleRowCollapse"
-            :loading="loading"
-            aria-label="Corporate bookings table"
+            responsiveLayout="scroll"
           >
-            <Column expander style="width: 5rem" header-style="width: 5rem">
-              <template #header>
-                <span class="sr-only">Expand row</span>
-              </template>
-            </Column>
-            <Column field="reservation_code" header="Booking ID" sortable>
-              <template #body="slotProps">
+            <Column expander style="width: 5rem" />
+            
+            <Column header="Reservation Code" style="min-width: 180px">
+              <template #body="{ data }">
                 <div class="cell-content">
-                  <span class="booking-id">{{ slotProps.data.reservation_code }}</span>
+                  <i class="pi pi-bookmark text-primary"></i>
+                  <span class="booking-id">{{ data.reservation_code }}</span>
                 </div>
               </template>
             </Column>
-            <Column field="coordinator.full_name" header="Coordinator" sortable>
-              <template #body="slotProps">
+
+            <Column header="Company" style="min-width: 200px">
+              <template #body="{ data }">
                 <div class="cell-content">
-                  <i class="pi pi-user text-primary" aria-hidden="true"></i>
-                  <span>{{ slotProps.data.coordinator?.full_name || 'N/A' }}</span>
+                  <i class="pi pi-building text-primary"></i>
+                  <span>{{ data.company?.name || 'N/A' }}</span>
                 </div>
               </template>
             </Column>
-            <Column header="Guests" sortable>
-              <template #body="slotProps">
+
+            <!-- <Column header="Coordinator" style="min-width: 200px">
+              <template #body="{ data }">
                 <div class="cell-content">
-                  <i class="pi pi-users text-primary" aria-hidden="true"></i>
-                  <span>{{ getGuestCountText(slotProps.data.guests.length) }}</span>
+                  <i class="pi pi-user text-primary"></i>
+                  <span>{{ data.coordinator?.full_name || 'N/A' }}</span>
                 </div>
               </template>
-            </Column>
-            <Column field="check_in_date" header="Check-In" sortable>
-              <template #body="slotProps">
-                <div class="cell-content">
-                  <i class="pi pi-calendar text-green-600" aria-hidden="true"></i>
-                  <span>{{ formatDate(slotProps.data.check_in_date) }}</span>
-                </div>
+            </Column> -->
+
+             <Column header="Booking Date" style="min-width: 150px">
+              <template #body="{ data }">
+                {{ formatDate(data.booking_date || data.created_at) }}
               </template>
             </Column>
-            <Column field="check_out_date" header="Check-Out" sortable>
-              <template #body="slotProps">
-                <div class="cell-content">
-                  <i class="pi pi-calendar text-red-600" aria-hidden="true"></i>
-                  <span>{{ formatDate(slotProps.data.check_out_date) }}</span>
-                </div>
+
+            <Column header="Check-In" style="min-width: 150px">
+              <template #body="{ data }">
+                {{ formatDate(data.check_in_date) }}
               </template>
             </Column>
-            <Column header="Booking Status" sortable>
-              <template #body="slotProps">
+
+            <Column header="Check-Out" style="min-width: 150px">
+              <template #body="{ data }">
+                {{ formatDate(data.check_out_date) }}
+              </template>
+            </Column>
+
+            <Column header="Guests" style="min-width: 100px">
+              <template #body="{ data }">
                 <Tag
-                  :value="getBookingStatus(slotProps.data)"
-                  :severity="getBookingStatusSeverity(slotProps.data)"
+                  :value="getGuestCountText(data.guests?.length || 0)"
+                  severity="info"
                   class="status-tag"
                 />
               </template>
             </Column>
-            <Column header="Actions">
-              <template #body="slotProps">
+
+            <Column header="Booking Status" style="min-width: 120px">
+              <template #body="{ data }">
+                <Tag
+                  :value="getBookingStatus(data)"
+                  :severity="getBookingStatusSeverity(data)"
+                  class="status-tag"
+                />
+              </template>
+            </Column>
+
+            <Column header="Payment Status" style="min-width: 140px">
+              <template #body="{ data }">
+                <Tag
+                  :value="getPaymentStatus(data)"
+                  :severity="getPaymentStatusSeverity(data)"
+                  class="status-tag"
+                />
+              </template>
+            </Column>
+
+            <Column header="Actions" style="min-width: 280px">
+              <template #body="{ data }">
                 <div class="action-buttons">
+                  <!-- Check-in button -->
                   <Button
-                    label="Edit"
-                    icon="pi pi-pencil"
-                    class="p-button-sm p-button-outlined p-button-info mr-2"
-                    @click="openEditBookingDialog(slotProps.data)"
-                    :disabled="getBookingStatus(slotProps.data) === 'Completed'"
-                    :aria-label="`Edit booking ${slotProps.data.reservation_code}`"
+                    v-if="canBookingCheckIn(data)"
+                    icon="pi pi-sign-in"
+                    class="p-button-sm p-button-success"
+                    @click="handleBookingCheckIn(data)"
+                    v-tooltip="'Check in all guests'"
                   />
+                  
+                  <!-- Check-out button -->
                   <Button
-                    label="View Bill"
-                    icon="pi pi-file"
-                    class="p-button-sm p-button-outlined p-button-success"
-                    @click="viewBill(slotProps.data)"
-                    :aria-label="`View bill for booking ${slotProps.data.reservation_code}`"
+                    v-else-if="canBookingCheckOut(data)"
+                    icon="pi pi-sign-out"
+                    class="p-button-sm p-button-warning"
+                    @click="handleBookingCheckOut(data)"
+                    v-tooltip="'Check out all guests'"
+                  />
+                  
+                  <!-- Completed status -->
+                  <div
+                    v-else-if="isBookingCompleted(data)"
+                    class="completed-status-small"
+                  >
+                    <i class="pi pi-check-circle"></i>
+                    <span>Completed</span>
+                  </div>
+                  
+                    <Button
+                    v-if="!isBookingCompleted(data)"
+                    icon="pi pi-pencil"
+                    class="p-button-sm p-button-outlined"
+                    @click="openEditBookingDialog(data)"
+                    v-tooltip="'Edit Booking'"
+                    />
+                  <Button
+                    icon="pi pi-file-pdf"
+                    class="p-button-sm p-button-outlined p-button-info"
+                    @click="viewBill(data)"
+                    v-tooltip="'View Bill'"
                   />
                 </div>
               </template>
             </Column>
-            <template #expansion="slotProps">
+
+            <template #expansion="{ data }">
               <div class="guests-expansion">
                 <div class="expansion-header">
-                  <h4>{{ getGuestCountText(slotProps.data.guests.length) }}</h4>
+                  <h4>Guests ({{ data.guests?.length || 0 }})</h4>
                 </div>
                 <div class="guests-grid">
-                  <div v-for="guest in slotProps.data.guests" :key="guest.id" class="guest-card">
+                  <div
+                    v-for="guest in data.guests"
+                    :key="guest.id"
+                    class="guest-card"
+                  >
                     <div class="guest-header">
                       <div class="guest-avatar">
-                        <i class="pi pi-user" aria-hidden="true"></i>
+                        <i class="pi pi-user"></i>
                       </div>
                       <div class="guest-info">
                         <h5>{{ guest.full_name }}</h5>
-                        <p class="guest-email">{{ guest.email || 'No email' }}</p>
+                        <p class="guest-email">{{ guest.email || 'N/A' }}</p>
                       </div>
-                      <div class="guest-status">
-                        <Tag :value="getGuestStatus(guest)" :severity="getGuestStatusSeverity(guest)" />
-                      </div>
+                      <Tag
+                        :value="getGuestStatus(guest)"
+                        :severity="getGuestStatusSeverity(guest)"
+                        class="status-tag"
+                      />
                     </div>
-                    <div class="room-info">
+
+                    <div v-if="guest.room" class="room-info">
                       <div class="room-details">
-                        <i class="pi pi-home text-blue-600" aria-hidden="true"></i>
-                        <span>Room {{ guest.room.name }}</span>
-                        <span class="room-price">{{ formatCurrency(guest.room.price) }}/night</span>
+                        <i class="pi pi-home"></i>
+                        <span>{{ guest.room.name }}</span>
+                        <span class="room-price">{{ formatCurrency(guest.room.price) }}</span>
                       </div>
                     </div>
+
                     <div class="guest-actions">
                       <Button
                         v-if="!guest.is_checked_in && !guest.is_checked_out"
                         label="Check In"
                         icon="pi pi-sign-in"
-                        size="small"
-                        severity="success"
+                        class="p-button-sm p-button-success"
                         @click="handleCheckIn(guest)"
-                        :aria-label="`Check in ${guest.full_name}`"
                       />
                       <Button
                         v-else-if="guest.is_checked_in && !guest.is_checked_out"
                         label="Check Out"
                         icon="pi pi-sign-out"
-                        size="small"
-                        severity="danger"
+                        class="p-button-sm p-button-danger"
                         @click="handleCheckOut(guest)"
-                        :aria-label="`Check out ${guest.full_name}`"
                       />
-                      <div v-else class="completed-status">
-                        <i class="pi pi-check-circle" aria-hidden="true"></i>
+                      <div
+                        v-else-if="guest.is_checked_out"
+                        class="completed-status"
+                      >
+                        <i class="pi pi-check-circle"></i>
                         <span>Completed</span>
                       </div>
                       <Button
                         icon="pi pi-eye"
-                        size="small"
-                        outlined
-                        severity="success"
+                        class="p-button-sm p-button-outlined"
                         @click="showGuestDetails(guest)"
-                        :aria-label="`View details for ${guest.full_name}`"
+                        v-tooltip="'View Details'"
                       />
                       <Button
-                        icon="pi pi-file"
-                        size="small"
-                        outlined
-                        severity="info"
-                        @click="openGuestBill(guest, slotProps.data)"
-                        :aria-label="`View bill for ${guest.full_name}`"
+                        icon="pi pi-print"
+                        class="p-button-sm p-button-outlined p-button-info"
+                        @click="openGuestBill(guest, data)"
+                        v-tooltip="'View Bill'"
                       />
                     </div>
+
                     <div v-if="guest.checked_in_at || guest.checked_out_at" class="guest-timestamps">
                       <div v-if="guest.checked_in_at" class="timestamp">
-                        <i class="pi pi-calendar text-green-600" aria-hidden="true"></i>
+                        <i class="pi pi-sign-in"></i>
                         <span>Checked in: {{ formatDateTime(guest.checked_in_at) }}</span>
                       </div>
                       <div v-if="guest.checked_out_at" class="timestamp">
-                        <i class="pi pi-calendar text-red-600" aria-hidden="true"></i>
+                        <i class="pi pi-sign-out"></i>
                         <span>Checked out: {{ formatDateTime(guest.checked_out_at) }}</span>
                       </div>
                     </div>
@@ -854,6 +1064,7 @@ watch(searchQuery, handleSearch, { debounce: 500 });
 .filter-section {
   display: flex;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .status-dropdown {
@@ -914,6 +1125,21 @@ watch(searchQuery, handleSearch, { debounce: 500 });
 .action-buttons {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.completed-status-small {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #059669;
+  font-weight: 500;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: #f0fdf4;
+  border-radius: 4px;
+  border: 1px solid #bbf7d0;
 }
 
 /* Guest Expansion */

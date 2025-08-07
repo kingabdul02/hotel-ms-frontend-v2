@@ -34,11 +34,17 @@ const {
 
 const toast = useToast();
 
+/* --------------- pagination refs --------------- */
+const rows = ref(10); // default rows per page
+
 /* --------------- filter refs --------------- */
 const searchQuery = ref('');
 const filterRoomTypeId = ref<number | null>(null);
 const filterPaymentStatus = ref<string | null>(null);
-const filterDateRange = ref<[Date | null, Date | null]>([null, null]);
+const filterBookingStatus = ref<string | null>(null);
+const filterDateRange = ref<Date[]>([]);
+const filterCheckoutRange = ref<Date[]>([]);
+const filterBookingDateRange = ref<Date[]>([]);
 
 /* dropdown options fetched from backend */
 const roomTypeOptions = ref<{ label: string; value: number }[]>([]);
@@ -53,11 +59,18 @@ enum E_PaymentStatus {
 
 const paymentOptions = [
   { label: 'All', value: null },
-  { label: 'Successful', value: E_PaymentStatus.SUCCESSFUL },
+  { label: 'Successful', value: E_PaymentStatus.PAID },
   { label: 'Pending', value: E_PaymentStatus.PENDING },
   { label: 'Failed', value: E_PaymentStatus.FAILED },
   { label: 'Refunded', value: E_PaymentStatus.REFUNDED },
   { label: 'Cancelled', value: E_PaymentStatus.CANCELLED },
+];
+
+const bookingStatusOptions = [
+  { label: 'All', value: null },
+  { label: 'Pending', value: 'is_confirmed' },
+  { label: 'Checked-In', value: 'is_checked_in' },
+  { label: 'Checked Out', value: 'is_checked_out' },
 ];
 
 /* --------------- ui state --------------- */
@@ -67,21 +80,33 @@ const selectedBooking = ref(null);
 const showReservationDialog = ref(false);
 
 /* --------------- helpers --------------- */
-const apiDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
+const apiDate = (d: Date | undefined) => {
+  // This ensures local date string (YYYY-MM-DD) without UTC conversion
+  if (!d) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const buildFilters = () => ({
   search: searchQuery.value,
   room_type_id: filterRoomTypeId.value,
   payment_status: filterPaymentStatus.value,
+  booking_status: filterBookingStatus.value,
   check_in_from: apiDate(filterDateRange.value[0]),
   check_in_to: apiDate(filterDateRange.value[1]),
+  check_out_from: apiDate(filterCheckoutRange.value[0]),
+  check_out_to: apiDate(filterCheckoutRange.value[1]),
+  booking_date_from: apiDate(filterBookingDateRange.value[0]),
+  booking_date_to: apiDate(filterBookingDateRange.value[1]),
 });
 
 /* --------------- bookings fetch --------------- */
 const fetchBookings = async (page = 1) => {
   isLoading.value = true;
   try {
-    await statisticsBooking(page, buildFilters());
+    await statisticsBooking(page, buildFilters(), rows.value);
   } catch (error) {
     toast.add({
       severity: 'error',
@@ -92,6 +117,12 @@ const fetchBookings = async (page = 1) => {
   } finally {
     isLoading.value = false;
   }
+};
+
+/* --------------- pagination event handler --------------- */
+const onPage = (event: any) => {
+  rows.value = event.rows;
+  fetchBookings(event.page + 1);
 };
 
 /* --------------- room-type dropdown load --------------- */
@@ -115,20 +146,25 @@ const resetFilters = () => {
   searchQuery.value = '';
   filterRoomTypeId.value = null;
   filterPaymentStatus.value = null;
-  filterDateRange.value = [null, null];
+  filterBookingStatus.value = null;
+  filterDateRange.value = [];
+  filterCheckoutRange.value = [];
+  filterBookingDateRange.value = [];
   fetchBookings(1);
 };
 
 /* --------------- watch filters --------------- */
 watch(
-  [searchQuery, filterRoomTypeId, filterPaymentStatus, filterDateRange],
+  [searchQuery, filterRoomTypeId, filterPaymentStatus, filterBookingStatus, filterDateRange, filterCheckoutRange, filterBookingDateRange],
   () => {
-    // Only fetch bookings if the date range is fully cleared or both dates are set
-    const [startDate, endDate] = filterDateRange.value;
-    if (
-      (startDate === null && endDate === null) ||
-      (startDate !== null && endDate !== null)
-    ) {
+    // Only fetch bookings if all date ranges are fully cleared or both dates are set
+    const checkInRange = filterDateRange.value;
+    const checkOutRange = filterCheckoutRange.value;
+    const bookingRange = filterBookingDateRange.value;
+    
+    const isValidRange = (range: Date[]) => range.length === 0 || range.length === 2;
+    
+    if (isValidRange(checkInRange) && isValidRange(checkOutRange) && isValidRange(bookingRange)) {
       fetchBookings(1);
     }
   },
@@ -201,6 +237,18 @@ const openReservationDialog = () => {
           placeholder="Payment"
           class="w-full md:w-10rem"
         />
+        <Dropdown
+          v-model="filterBookingStatus"
+          :options="bookingStatusOptions"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Booking Status"
+          class="w-full md:w-12rem"
+        />
+      </div>
+      
+      <!-- Date filter row -->
+      <div class="flex flex-column md:flex-row gap-3 mb-3">
         <Calendar
           v-model="filterDateRange"
           selectionMode="range"
@@ -210,7 +258,26 @@ const openReservationDialog = () => {
           class="w-full md:w-16rem"
           :manualInput="false"
           :showButtonBar="true"
-          @clear-click="resetFilters"
+        />
+        <Calendar
+          v-model="filterCheckoutRange"
+          selectionMode="range"
+          dateFormat="yy-mm-dd"
+          showIcon
+          placeholder="Check-out range"
+          class="w-full md:w-16rem"
+          :manualInput="false"
+          :showButtonBar="true"
+        />
+        <Calendar
+          v-model="filterBookingDateRange"
+          selectionMode="range"
+          dateFormat="yy-mm-dd"
+          showIcon
+          placeholder="Booking date range"
+          class="w-full md:w-16rem"
+          :manualInput="false"
+          :showButtonBar="true"
         />
         <Button
           icon="pi pi-filter-slash"
@@ -227,12 +294,13 @@ const openReservationDialog = () => {
       <DataTable
         v-else
         :value="recentBookings"
-        :rows="pagingMeta.per_page"
+        :rows="rows"
+        :rowsPerPageOptions="[10, 20, 50, 100]"
         :totalRecords="pagingMeta.total"
         :first="(pagingMeta.current_page - 1) * pagingMeta.per_page"
         lazy
         paginator
-        @page="fetchBookings($event.page + 1)"
+        @page="onPage"
       >
         <Column field="booking_id" header="ID" sortable />
 
@@ -246,6 +314,12 @@ const openReservationDialog = () => {
           <template #body="{ data }">
             <i class="pi pi-home mr-1 text-primary" /> {{ data.room?.name }}
           </template>
+        </Column>
+
+        <Column header="Booking Date">
+          <template #body="{ data }">{{
+            formatDateTime(data.created_at)
+          }}</template>
         </Column>
 
         <Column header="Check-In">
@@ -303,7 +377,6 @@ const openReservationDialog = () => {
         <Column header="Actions">
           <template #body="{ data }">
             <Button
-              label="View Details"
               icon="pi pi-eye"
               class="p-button-sm p-button-outlined"
               @click="openDetails(data)"
