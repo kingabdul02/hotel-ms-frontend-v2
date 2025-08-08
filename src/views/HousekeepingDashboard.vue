@@ -561,6 +561,7 @@ const loadHousekeepingData = async ({ date } = {}) => {
             cleanRooms: stats.cleanRooms?.count ?? 0,
             dirtyRooms: stats.dirtyRooms?.count ?? 0,
             inProgressRooms: stats.inProgressRooms?.count ?? 0,
+            maintenanceRooms: stats.maintenanceRooms?.count ?? 0,
             outOfServiceRooms: 0, // not provided by current API
             activeHousekeepers: stats.activeHousekeepers?.active ?? 0,
             totalHousekeepers: stats.activeHousekeepers?.total ?? 0,
@@ -570,6 +571,7 @@ const loadHousekeepingData = async ({ date } = {}) => {
             cleanPct: stats.cleanRooms?.percentage ?? null,
             dirtyPct: stats.dirtyRooms?.percentage ?? null,
             inProgressPct: stats.inProgressRooms?.percentage ?? null,
+            maintenancePct: stats.maintenanceRooms?.percentage ?? null,
             asOf: stats.asOf
         };
         // Derive summary counts via reusable service helper

@@ -287,29 +287,38 @@ const fetchData = async (isInitial = true) => {
         ]);
 
         if (housekeepersResponse && roomsResponse) {
-            // Process housekeepers
-            const newHousekeepers = housekeepersResponse.data.data.map(hk => ({
+            // Process housekeepers (normalize id & capacity)
+            const newHousekeepers = (housekeepersResponse.data?.data || housekeepersResponse.data || []).map(hk => ({
                 ...hk,
+                id: hk.id ?? hk.housekeeperId ?? hk.user_id,
+                maxCapacity: hk.maxCapacity ?? hk.capacity ?? hk.max_capacity ?? 10,
                 assignedRooms: []
             }));
             housekeepers.value = isInitial ? newHousekeepers : [...housekeepers.value, ...newHousekeepers];
-            hasMoreHousekeepers.value = !!housekeepersResponse.data.next_page_url;
+            hasMoreHousekeepers.value = !!(housekeepersResponse.links?.next || housekeepersResponse.next_page_url);
 
             // Process rooms
-            const allRooms = roomsResponse.data;
+            const allRooms = roomsResponse.data || [];
 
-            // This part needs to be carefully managed with pagination
-            // For simplicity, we'll assume assignments are for currently loaded housekeepers and rooms
-            // A more robust solution might need to fetch all assignments upfront if possible
-
+            // Build assigned from assignments
             const assignedRoomIds = new Set();
             if (assignmentsResponse && assignmentsResponse.data) {
-                assignmentsResponse.data.forEach(assignment => {
-                    const housekeeper = housekeepers.value.find(hk => hk.id === assignment.housekeeperId);
+                const assignments = assignmentsResponse.data;
+                assignments.forEach(assignment => {
+                    const hkId = String(assignment.housekeeperId);
+                    const housekeeper = housekeepers.value.find(hk => String(hk.id ?? hk.housekeeperId ?? hk.user_id) === hkId);
                     if (housekeeper) {
-                        assignment.rooms.forEach(room => {
-                            // Avoid duplicates
-                            if (!housekeeper.assignedRooms.some(r => r.id === room.id)) {
+                        assignment.rooms.forEach(r => {
+                            const room = {
+                                id: r.id,
+                                name: r.name ?? r.number ?? `Room ${r.id}`,
+                                status: r.status,
+                                roomType: typeof r.roomType === 'string' ? r.roomType : (r.roomType?.name ?? ''),
+                                occupied: !!r.occupied,
+                                checkOutTime: r.checkOutTime ?? r.check_out ?? null,
+                                priority: r.priority ?? 'medium'
+                            };
+                            if (!housekeeper.assignedRooms.some(existing => existing.id === room.id)) {
                                 housekeeper.assignedRooms.push(room);
                             }
                             assignedRoomIds.add(room.id);
@@ -318,26 +327,24 @@ const fetchData = async (isInitial = true) => {
                 });
             }
 
-            const newUnassignedRooms = allRooms.filter(room => 
-                !assignedRoomIds.has(room.id) && 
-                ['dirty', 'in-progress', 'out-of-service'].includes(room.status.toLowerCase())
-            ).map(room => ({
-                id: room.id,
-                name: room.name,
-                status: room.status,
-                roomType: room.roomType.name,
-                occupied: !room.is_available,
-                checkOutTime: room.check_out,
-                priority: room.priority || 'medium'
-            }));
+            const newUnassignedRooms = allRooms
+                .filter(room => !assignedRoomIds.has(room.id) && ['dirty', 'in-progress', 'out-of-service'].includes(String(room.status).toLowerCase()))
+                .map(room => ({
+                    id: room.id,
+                    name: room.name,
+                    status: room.status,
+                    roomType: typeof room.roomType === 'string' ? room.roomType : (room.roomType?.name ?? ''),
+                    occupied: !room.is_available,
+                    checkOutTime: room.check_out,
+                    priority: room.priority || 'medium'
+                }));
 
             unassignedRooms.value = isInitial ? newUnassignedRooms : [...unassignedRooms.value, ...newUnassignedRooms];
-            hasMoreRooms.value = !!roomsResponse.links.next;
-
+            hasMoreRooms.value = !!(roomsResponse.links?.next || roomsResponse.next_page_url);
 
             // Extract room types for filter
             if (isInitial) {
-                const roomTypes = [...new Set(allRooms.map(room => room.roomType.name))];
+                const roomTypes = [...new Set(allRooms.map(room => (typeof room.roomType === 'string' ? room.roomType : (room.roomType?.name ?? ''))))];
                 roomTypeOptions.value = roomTypes.map(type => ({ label: type, value: type }));
             }
         } else {
@@ -422,7 +429,7 @@ const onDropToHousekeeper = async (event, housekeeper) => {
         toast.add({
             severity: 'success',
             summary: 'Success',
-            detail: `Room ${draggedRoom.value.number} assigned to ${housekeeper.name}`,
+            detail: `Room ${draggedRoom.value.name} assigned to ${housekeeper.name}`,
             life: 3000
         });
         
@@ -474,7 +481,7 @@ const onDropToUnassigned = async (event) => {
         toast.add({
             severity: 'info',
             summary: 'Room Unassigned',
-            detail: `Room ${draggedRoom.value.number} moved to unassigned`,
+            detail: `Room ${draggedRoom.value.name} moved to unassigned`,
             life: 3000
         });
         
@@ -626,10 +633,11 @@ const autoAssignRooms = () => {
 
 const updateAssignment = async (housekeeperId, roomIds) => {
     const response = await housekeepingService.assignRoomsToHousekeeper(housekeeperId, roomIds);
-    if (!response.success) {
+    const ok = response?.status === 'success' || response?.success === true;
+    if (!ok) {
         // Revert optimistic update on failure
         fetchData();
-        throw new Error(response.message || 'Failed to update assignment');
+        throw new Error(response?.message || 'Failed to update assignment');
     }
     return response;
 };

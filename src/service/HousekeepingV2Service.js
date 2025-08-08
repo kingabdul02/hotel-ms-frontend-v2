@@ -33,7 +33,7 @@ export class HousekeepingV2Service {
             clean: stats?.cleanRooms?.count ?? 0,
             dirty: stats?.dirtyRooms?.count ?? 0,
             inProgress: stats?.inProgressRooms?.count ?? 0,
-            maintenance: 0 // Not provided by backend stats currently
+            maintenance: stats?.maintenanceRooms?.count ?? 0 // now sourced from backend
         };
     }
 
