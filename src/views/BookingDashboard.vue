@@ -7,12 +7,18 @@ import { useStore } from 'vuex';
 import { LOADING_SPINNER_SHOW_MUTATION } from '@/store/storeconstants';
 import { formatDateTime } from '@/utils/dateTimeFormatter';
 import BookingDetailsDialog from '@/components/BookingManagement/BookingDetailsDialog.vue';
+import BookingModificationDialog from '@/components/BookingManagement/BookingModificationDialog.vue';
+import CustomChargesDialog from '@/components/BookingManagement/CustomChargesDialog.vue';
+import POSChargesDialog from '@/components/pos/POSChargesDialog.vue';
 
 const store = useStore();
 const toast = useToast();
 const { isDarkTheme } = useLayout();
 const selectedBooking = ref(null);
 const showDialog = ref(false);
+const isBookingModificationDialogVisible = ref(false);
+const isCustomChargesDialogVisible = ref(false);
+const isPOSChargesDialogVisible = ref(false);
 
 // Booking Stats
 const checkInsToday = ref(0);
@@ -160,6 +166,28 @@ const showDetails = (booking) => {
   showDialog.value = true;
 };
 
+const showBookingModification = (booking) => {
+  selectedBooking.value = booking;
+  isBookingModificationDialogVisible.value = true;
+};
+
+const showCustomCharges = (booking) => {
+  selectedBooking.value = booking;
+  isCustomChargesDialogVisible.value = true;
+};
+
+const showPOSCharges = (booking) => {
+  selectedBooking.value = booking;
+  isPOSChargesDialogVisible.value = true;
+};
+
+const handleBookingUpdate = () => {
+  isBookingModificationDialogVisible.value = false;
+  isCustomChargesDialogVisible.value = false;
+  isPOSChargesDialogVisible.value = false;
+  statisticsBooking(); // Refresh the data
+};
+
 const value = ref(50); // placeholder knob
 </script>
 
@@ -280,12 +308,39 @@ const value = ref(50); // placeholder knob
 
             <Column header="Actions">
               <template #body="slotProps">
-                <Button
-                  label="View Details"
-                  icon="pi pi-eye"
-                  class="p-button-sm p-button-outlined"
-                  @click="showDetails(slotProps.data)"
-                />
+                <div class="flex gap-2">
+                  <Button
+                    label="View"
+                    icon="pi pi-eye"
+                    size="small"
+                    outlined
+                    @click="showDetails(slotProps.data)"
+                  />
+                  <Button
+                    label="Modify"
+                    icon="pi pi-pencil"
+                    size="small"
+                    severity="info"
+                    outlined
+                    @click="showBookingModification(slotProps.data)"
+                  />
+                  <Button
+                    label="Charges"
+                    icon="pi pi-dollar"
+                    size="small"
+                    severity="warning"
+                    outlined
+                    @click="showCustomCharges(slotProps.data)"
+                  />
+                  <Button
+                    label="POS"
+                    icon="pi pi-shopping-cart"
+                    size="small"
+                    severity="success"
+                    outlined
+                    @click="showPOSCharges(slotProps.data)"
+                  />
+                </div>
               </template>
             </Column>
           </DataTable>
@@ -297,6 +352,27 @@ const value = ref(50); // placeholder knob
         :selectedBooking="selectedBooking"
         @update:visible="showDialog = $event"
         @update="statisticsBooking"
+      />
+
+      <BookingModificationDialog
+        :visible="isBookingModificationDialogVisible"
+        :booking="selectedBooking"
+        @update:visible="isBookingModificationDialogVisible = $event"
+        @booking-updated="handleBookingUpdate"
+      />
+
+      <CustomChargesDialog
+        :visible="isCustomChargesDialogVisible"
+        :booking="selectedBooking"
+        @update:visible="isCustomChargesDialogVisible = $event"
+        @charges-added="handleBookingUpdate"
+      />
+
+      <POSChargesDialog
+        :visible="isPOSChargesDialogVisible"
+        :booking="selectedBooking"
+        @update:visible="isPOSChargesDialogVisible = $event"
+        @charges-posted="handleBookingUpdate"
       />
     </div>
   </div>

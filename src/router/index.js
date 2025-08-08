@@ -32,6 +32,18 @@ const routes = [
                 meta: { auth: true }
             },
             {
+                path: '/admin/dashboard/enhanced',
+                name: 'enhanceddashboard',
+                component: () => import('@/views/EnhancedDashboard.vue'),
+                meta: { auth: true }
+            },
+            {
+                path: '/admin/housekeeping/dashboard',
+                name: 'housekeepingdashboard',
+                component: () => import('@/views/HousekeepingDashboard.vue'),
+                meta: { auth: true }
+            },
+            {
                 path: '/settings/dashboard',
                 children: [
                     {
