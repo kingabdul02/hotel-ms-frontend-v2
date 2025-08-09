@@ -10,7 +10,7 @@
                         option-label="label" 
                         option-value="value"
                         placeholder="Select Period"
-                        @change="fetchHeatmapData"
+                        @change="onPeriodChange"
                     />
                     <Calendar 
                         v-if="selectedPeriod === 'custom'"
@@ -18,7 +18,7 @@
                         selection-mode="range" 
                         show-icon
                         placeholder="Custom range"
-                        @date-select="fetchHeatmapData"
+                        @date-select="onDateSelect"
                     />
                     <Button 
                         label="Refresh" 
@@ -108,7 +108,7 @@ const dashboardService = new DashboardV2Service();
 const toast = useToast();
 
 const loading = ref(false);
-const selectedPeriod = ref('daily');
+const selectedPeriod = ref('weekly'); // default changed to weekly
 const customDateRange = ref([]);
 const heatmapData = ref([]);
 const statistics = ref(null);
@@ -151,6 +151,15 @@ onMounted(() => {
     }
 });
 
+// Helper to format a Date as YYYY-MM-DD in local time (avoids UTC shift from toISOString)
+const formatDateForApi = (d) => {
+    if (!(d instanceof Date)) return null;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 const fetchHeatmapData = async () => {
     loading.value = true;
     try {
@@ -158,8 +167,9 @@ const fetchHeatmapData = async () => {
         let endDate = null;
         
         if (selectedPeriod.value === 'custom' && customDateRange.value.length === 2) {
-            startDate = customDateRange.value[0].toISOString().split('T')[0];
-            endDate = customDateRange.value[1].toISOString().split('T')[0];
+            // Use local date parts instead of toISOString to prevent off-by-one (timezone) errors
+            startDate = formatDateForApi(customDateRange.value[0]);
+            endDate = formatDateForApi(customDateRange.value[1]);
         }
         
         const response = await dashboardService.getOccupancyHeatmap(
@@ -225,6 +235,30 @@ const formatCellDate = (date) => {
             return new Date(date).toLocaleDateString('en-US', { month: 'short' });
         default:
             return new Date(date).getDate().toString();
+    }
+};
+
+const onPeriodChange = () => {
+    if (selectedPeriod.value !== 'custom') {
+        fetchHeatmapData();
+    } else {
+        // Reset range & data when entering custom mode
+        customDateRange.value = [];
+        heatmapData.value = [];
+        statistics.value = null;
+    }
+};
+
+const onDateSelect = () => {
+    // PrimeVue range selection updates array incrementally; wait until both dates picked
+    if (
+        selectedPeriod.value === 'custom' &&
+        customDateRange.value &&
+        customDateRange.value.length === 2 &&
+        customDateRange.value[0] instanceof Date &&
+        customDateRange.value[1] instanceof Date
+    ) {
+        fetchHeatmapData();
     }
 };
 </script>
