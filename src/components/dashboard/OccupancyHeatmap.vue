@@ -49,11 +49,11 @@
                         v-for="dataPoint in heatmapData" 
                         :key="dataPoint.date"
                         class="heatmap-cell"
-                        :style="{ backgroundColor: getHeatmapColor(dataPoint.occupancy) }"
-                        :title="`${formatDate(dataPoint.date)}: ${dataPoint.occupancy}% occupancy`"
+                        :style="{ backgroundColor: getHeatmapColor(dataPoint.occupancy_rate) }"
+                        :title="`${formatDate(dataPoint.date)}: ${dataPoint.occupancy_rate}% occupancy`"
                     >
                         <div class="cell-date">{{ formatCellDate(dataPoint.date) }}</div>
-                        <div class="cell-occupancy">{{ dataPoint.occupancy }}%</div>
+                        <div class="cell-occupancy">{{ dataPoint.occupancy_rate }}%</div>
                     </div>
                 </div>
 
@@ -111,6 +111,7 @@ const loading = ref(false);
 const selectedPeriod = ref('daily');
 const customDateRange = ref([]);
 const heatmapData = ref([]);
+const statistics = ref(null);
 
 const periodOptions = [
     { label: 'Daily', value: 'daily' },
@@ -131,19 +132,15 @@ const gridClass = computed(() => {
 });
 
 const averageOccupancy = computed(() => {
-    if (heatmapData.value.length === 0) return 0;
-    const sum = heatmapData.value.reduce((acc, item) => acc + item.occupancy, 0);
-    return Math.round(sum / heatmapData.value.length);
+    return statistics.value ? Math.round(statistics.value.average_occupancy) : 0;
 });
 
 const peakOccupancy = computed(() => {
-    if (heatmapData.value.length === 0) return 0;
-    return Math.max(...heatmapData.value.map(item => item.occupancy));
+    return statistics.value ? statistics.value.peak_occupancy : 0;
 });
 
 const lowOccupancy = computed(() => {
-    if (heatmapData.value.length === 0) return 0;
-    return Math.min(...heatmapData.value.map(item => item.occupancy));
+    return statistics.value ? statistics.value.lowest_occupancy : 0;
 });
 
 onMounted(() => {
@@ -172,8 +169,9 @@ const fetchHeatmapData = async () => {
         );
         
         if (response.success) {
-            heatmapData.value = response.data;
-            emit('data-loaded', response.data);
+            heatmapData.value = response.data.heatmap;
+            statistics.value = response.data.statistics;
+            emit('data-loaded', response.data.heatmap);
         } else {
             throw new Error(response.message || 'Failed to fetch heatmap data');
         }

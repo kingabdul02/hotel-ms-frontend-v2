@@ -53,15 +53,15 @@ export class DashboardV2Service {
     /**
      * Get RevPAR (Revenue per Available Room) data
      * @param {string} period - Period: today, 7d, 30d, custom
-     * @param {string} startDate - Start date for custom period
-     * @param {string} endDate - End date for custom period
+     * @param {string} start_date - Start date for custom period
+     * @param {string} end_date - End date for custom period
      * @returns {Promise} API response
      */
-    async getRevPAR(period = 'today', startDate = null, endDate = null) {
+    async getRevPAR(period = 'today', start_date = null, end_date = null) {
         try {
             const params = { period };
-            if (startDate) params.startDate = startDate;
-            if (endDate) params.endDate = endDate;
+            if (start_date) params.start_date = start_date;
+            if (end_date) params.end_date = end_date;
 
             const response = await axiosInstance.get(
                 `${this.baseURL}/v2/dashboard/revpar`,

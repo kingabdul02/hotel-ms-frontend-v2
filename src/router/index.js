@@ -28,7 +28,8 @@ const routes = [
             {
                 path: '/admin/booking/dashboard',
                 name: 'bookingdashboard',
-                component: () => import('@/views/BookingDashboard.vue'),
+                // component: () => import('@/views/BookingDashboard.vue'),
+                component: () => import('@/views/EnhancedDashboard.vue'),
                 meta: { auth: true }
             },
             {

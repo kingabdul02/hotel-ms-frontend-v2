@@ -370,15 +370,15 @@ const exporting = ref(false);
 
 // Data
 const housekeepingStats = ref({
-    totalRooms: 200,
-    cleanRooms: 156,
-    dirtyRooms: 32,
-    inProgressRooms: 8,
-    outOfServiceRooms: 4,
-    activeHousekeepers: 12,
-    totalHousekeepers: 15,
-    efficiency: 87,
-    efficiencyChange: 3.2
+    totalRooms: 0,
+    cleanRooms: 0,
+    dirtyRooms: 0,
+    inProgressRooms: 0,
+    outOfServiceRooms: 0,
+    activeHousekeepers: 0,
+    totalHousekeepers: 0,
+    efficiency: 0,
+    efficiencyChange: 0
 });
 
 // Status counts to feed RoomStatusTracker (sourced from backend stats via service)

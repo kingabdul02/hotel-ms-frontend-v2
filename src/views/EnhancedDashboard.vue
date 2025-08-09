@@ -391,6 +391,20 @@ const viewAllActivity = () => {
 
 const onRevPARLoaded = (data) => {
     console.log('RevPAR data loaded:', data);
+    if (data && data._raw) {
+        const rawData = data._raw;
+        dashboardStats.value = {
+            totalRevenue: rawData.totalRevenueThisMonth,
+            revenueChange: rawData.totalRevenueThisMonthChange,
+            occupancyRate: rawData.currentOccupancyRate?.rate || 0,
+            occupiedRooms: rawData.currentOccupancyRate?.occupied || 0,
+            totalRooms: rawData.currentOccupancyRate?.totalRooms || 0,
+            totalBookings: rawData.activeBookings,
+            checkInsToday: rawData.todaysCheckIns,
+            adr: rawData.averageDailyRate,
+            adrChange: 0 // Not in current payload, default to 0
+        };
+    }
 };
 
 const onAvailabilityLoaded = (data) => {

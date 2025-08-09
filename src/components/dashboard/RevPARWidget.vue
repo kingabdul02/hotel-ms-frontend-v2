@@ -10,7 +10,7 @@
                         option-label="label" 
                         option-value="value"
                         placeholder="Select Period"
-                        @change="fetchRevPARData"
+                        @change="onPeriodChange"
                     />
                     <Calendar 
                         v-if="selectedPeriod === 'custom'"
@@ -18,7 +18,8 @@
                         selection-mode="range" 
                         show-icon
                         placeholder="Custom range"
-                        @date-select="fetchRevPARData"
+                        @update:model-value="onCustomDateSelect"
+                        :max-date="maxDate"
                     />
                     <Button 
                         label="Refresh" 
@@ -107,7 +108,7 @@
                 </div>
 
                 <div class="revpar-chart" v-if="chartData">
-                    <h6>RevPAR Trend</h6>
+                    <h6>Revenue Trend</h6>
                     <Chart 
                         type="line" 
                         :data="chartData" 
@@ -155,6 +156,7 @@ const loading = ref(false);
 const selectedPeriod = ref('today');
 const customDateRange = ref([]);
 const revparData = ref(null);
+const maxDate = ref(new Date());
 
 const periodOptions = [
     { label: 'Today', value: 'today' },
@@ -164,26 +166,70 @@ const periodOptions = [
 ];
 
 const revparChangeClass = computed(() => {
-    if (!revparData.value || !revparData.value.revparChange) return '';
-    return revparData.value.revparChange >= 0 ? 'positive' : 'negative';
+    if (!revparData.value || typeof revparData.value.revparChange !== 'number') return '';
+    if (revparData.value.revparChange === 0) return ''; // neutral styling when exactly zero
+    return revparData.value.revparChange > 0 ? 'positive' : 'negative';
 });
 
 const revparChangeIcon = computed(() => {
-    if (!revparData.value || !revparData.value.revparChange) return '';
-    return revparData.value.revparChange >= 0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down';
+    if (!revparData.value || typeof revparData.value.revparChange !== 'number') return '';
+    if (revparData.value.revparChange === 0) return 'pi pi-minus';
+    return revparData.value.revparChange > 0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down';
 });
+
+// Transform backend response (which provides revenue-centric data) into revpar-focused structure
+const transformRevPARResponse = (raw) => {
+    if (!raw) return null;
+
+    // Derive total rooms
+    const totalRoomsFromOccupancy = raw.currentOccupancyRate?.totalRooms || 0;
+    const totalRoomsFromBreakdown = Array.isArray(raw.breakdown)
+        ? raw.breakdown.reduce((sum, r) => sum + (r.availableRooms || 0), 0)
+        : 0;
+    const totalRooms = totalRoomsFromOccupancy || totalRoomsFromBreakdown || 0;
+
+    // Compute RevPAR (revenue per available room) for the overall period
+    const totalRevenue = raw.totalRevenue || 0;
+    const revpar = totalRooms ? totalRevenue / totalRooms : 0;
+
+    // Use revenueChange as revparChange (assuming same comparative period logic) if present
+    const revparChange = typeof raw.revenueChange === 'number' ? raw.revenueChange : null;
+
+    // Build breakdown with revpar per room type
+    const breakdown = (raw.breakdown || []).map(item => ({
+        ...item,
+        revpar: item.availableRooms ? item.revenue / item.availableRooms : 0
+    }));
+
+    // Trend: backend provides revenue per day; convert to revpar per day
+    const roomsForTrend = totalRooms || (breakdown.reduce((s, b) => s + (b.availableRooms || 0), 0));
+    const trend = (raw.trend || []).map(item => ({
+        date: item.date,
+        revpar: roomsForTrend ? (item.revenue || 0) / roomsForTrend : 0,
+        revenue: item.revenue || 0
+    }));
+
+    return {
+        revpar: Number(revpar.toFixed(2)),
+        revparChange, // percentage
+        totalRevenue,
+        availableRooms: totalRooms,
+        occupancyRate: raw.currentOccupancyRate?.rate || 0,
+        breakdown,
+        trend,
+        // Keep any other fields if needed later
+        _raw: raw
+    };
+};
 
 const chartData = computed(() => {
     if (!revparData.value || !revparData.value.trend) return null;
-    
     return {
-        labels: revparData.value.trend.map(item => {
-            return new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        }),
+        labels: revparData.value.trend.map(item => new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
         datasets: [
             {
-                label: 'RevPAR',
-                data: revparData.value.trend.map(item => item.revpar),
+                label: 'Revenue',
+                data: revparData.value.trend.map(item => item.revenue || 0),
                 borderColor: '#10b981',
                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
                 tension: 0.4,
@@ -197,17 +243,18 @@ const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-        legend: {
-            display: false
+        legend: { display: false },
+        tooltip: {
+            callbacks: {
+                label: (ctx) => `₦${ctx.parsed.y.toLocaleString()}`
+            }
         }
     },
     scales: {
         y: {
             beginAtZero: true,
             ticks: {
-                callback: function(value) {
-                    return '₦' + value.toLocaleString();
-                }
+                callback(value) { return '₦' + Number(value).toLocaleString(); }
             }
         }
     }
@@ -221,7 +268,25 @@ onMounted(() => {
     }
 });
 
+const onPeriodChange = () => {
+    if (selectedPeriod.value !== 'custom') {
+        customDateRange.value = [];
+        fetchRevPARData();
+    }
+};
+
+const onCustomDateSelect = () => {
+    if (customDateRange.value && customDateRange.value.length === 2 && customDateRange.value[1]) {
+        fetchRevPARData();
+    }
+};
+
 const fetchRevPARData = async () => {
+    // Do not fetch if custom range is selected but not complete
+    if (selectedPeriod.value === 'custom' && (!customDateRange.value || customDateRange.value.length < 2 || !customDateRange.value[1])) {
+        return;
+    }
+
     loading.value = true;
     try {
         let startDate = null;
@@ -239,8 +304,8 @@ const fetchRevPARData = async () => {
         );
         
         if (response.success) {
-            revparData.value = response.data;
-            emit('data-loaded', response.data);
+            revparData.value = transformRevPARResponse(response.data);
+            emit('data-loaded', revparData.value);
         } else {
             throw new Error(response.message || 'Failed to fetch RevPAR data');
         }
