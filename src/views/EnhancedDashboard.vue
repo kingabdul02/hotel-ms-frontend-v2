@@ -117,84 +117,171 @@
                 </div>
             </div>
 
-            <!-- System Status -->
-            <div class="widget-section half-width">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>System Status</h5>
-                        <div class="status-indicator" :class="systemStatus.overall">
-                            {{ systemStatus.overall }}
+            <!-- Insert extended quick stats for expected check-ins/outs -->
+            <div class="quick-stats-grid">
+                <div class="stat-card expected">
+                    <div class="stat-icon"><i class="pi pi-sign-in" /></div>
+                    <div class="stat-content">
+                        <div class="stat-value">{{ dashboardStats.checkInsToday }}/{{ dashboardStats.expectedCheckInsToday }}</div>
+                        <div class="stat-label">Check-Ins (Actual / Expected)</div>
+                        <div class="stat-change" :class="checkInDeltaClass">
+                            <i :class="checkInDeltaIcon" />
+                            {{ checkInDeltaText }}
                         </div>
                     </div>
-                    <div class="system-status-content">
-                        <div class="status-item">
-                            <div class="status-info">
-                                <span class="status-name">API Services</span>
-                                <span class="status-value" :class="systemStatus.api">{{ systemStatus.api }}</span>
-                            </div>
-                            <div class="status-metrics">
-                                <span>Response Time: {{ systemStatus.apiResponseTime }}ms</span>
-                            </div>
-                        </div>
-                        
-                        <div class="status-item">
-                            <div class="status-info">
-                                <span class="status-name">Database</span>
-                                <span class="status-value" :class="systemStatus.database">{{ systemStatus.database }}</span>
-                            </div>
-                            <div class="status-metrics">
-                                <span>Connections: {{ systemStatus.dbConnections }}/{{ systemStatus.maxDbConnections }}</span>
-                            </div>
-                        </div>
-                        
-                        <div class="status-item">
-                            <div class="status-info">
-                                <span class="status-name">POS Integration</span>
-                                <span class="status-value" :class="systemStatus.pos">{{ systemStatus.pos }}</span>
-                            </div>
-                            <div class="status-metrics">
-                                <span>Last Sync: {{ formatTime(systemStatus.lastPosSync) }}</span>
-                            </div>
+                </div>
+                <div class="stat-card expected">
+                    <div class="stat-icon"><i class="pi pi-sign-out" /></div>
+                    <div class="stat-content">
+                        <div class="stat-value">{{ dashboardStats.checkOutsToday }}/{{ dashboardStats.expectedCheckOutsToday }}</div>
+                        <div class="stat-label">Check-Outs (Actual / Expected)</div>
+                        <div class="stat-change" :class="checkOutDeltaClass">
+                            <i :class="checkOutDeltaIcon" />
+                            {{ checkOutDeltaText }}
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Recent Activity -->
-            <div class="widget-section half-width">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Recent Activity</h5>
-                        <Button 
-                            label="View All" 
-                            icon="pi pi-external-link" 
-                            @click="viewAllActivity"
-                            class="p-button-sm p-button-text"
-                        />
+            <!-- Advanced Analytics Charts -->
+            <div class="widget-section full-width charts-grid">
+                <div class="card chart-card">
+                    <div class="card-header"><h5>Revenue by Room Type</h5></div>
+                    <div class="p-3">
+                        <Chart type="bar" :data="roomTypeRevenueChart" :options="roomTypeRevenueOptions" />
                     </div>
-                    <div class="activity-content">
-                        <div 
-                            v-for="activity in recentActivities" 
-                            :key="activity.id"
-                            class="activity-item"
+                </div>
+                <div class="card chart-card">
+                    <div class="card-header"><h5>Monthly Check-Ins / Check-Outs</h5></div>
+                    <div class="p-3">
+                        <Chart type="bar" :data="checkInOutChart" :options="checkInOutChartOptions" />
+                    </div>
+                </div>
+                <div class="card chart-card">
+                    <div class="card-header"><h5>Booking Status Distribution</h5></div>
+                    <div class="p-3">
+                        <Chart type="doughnut" :data="bookingStatusChart" :options="bookingStatusChartOptions" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Bookings (Moved from BookingDashboard) -->
+            <div class="widget-section full-width">
+                <div class="card bookings-table-card">
+                    <div class="card-header flex justify-between align-items-center">
+                        <h5 class="m-0 flex align-items-center gap-2">
+                            <i class="pi pi-list text-primary"></i>
+                            <span>Recent Bookings</span>
+                        </h5>
+                        <div class="table-header flex align-items-center gap-2 flex-wrap">
+                            <InputText
+                                v-model="searchQuery"
+                                placeholder="Search (guest, room, booking id)"
+                                class="search-input w-full md:w-15rem"
+                            >
+                                <template #prepend>
+                                    <i class="pi pi-search" />
+                                </template>
+                            </InputText>
+                            <Dropdown v-model="filters.status" :options="statusOptions" optionLabel="label" optionValue="value" placeholder="Status" class="w-9rem" showClear />
+                            <Dropdown v-model="filters.payment" :options="paymentOptions" optionLabel="label" optionValue="value" placeholder="Payment" class="w-9rem" showClear />
+                            <Calendar v-model="filters.dateRange" selectionMode="range" :manualInput="false" placeholder="Date Range" class="w-13rem" :showIcon="true" />
+                            <Button label="Clear" icon="pi pi-filter-slash" size="small" outlined @click="resetFilters" />
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <DataTable
+                            :value="filteredBookings"
+                            :paginator="true"
+                            lazy
+                            :rows="bookingsPager.rows"
+                            :totalRecords="bookingsPager.total"
+                            :first="(bookingsPager.page - 1) * bookingsPager.rows"
+                            @page="onPage"
+                            responsiveLayout="scroll"
+                            class="custom-datatable"
+                            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+                            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} bookings"
                         >
-                            <div class="activity-icon" :class="activity.type">
-                                <i :class="activity.icon"></i>
-                            </div>
-                            <div class="activity-info">
-                                <div class="activity-description">{{ activity.description }}</div>
-                                <div class="activity-time">{{ formatRelativeTime(activity.timestamp) }}</div>
-                            </div>
-                        </div>
-                        
-                        <div v-if="recentActivities.length === 0" class="no-activities">
-                            <i class="pi pi-info-circle"></i>
-                            <p>No recent activities</p>
-                        </div>
+                            <Column field="booking_id" header="Booking ID" sortable>
+                                <template #body="slotProps">
+                                    <i class="pi pi-home text-primary mr-2" />
+                                    <span>{{ slotProps.data.booking_id }}</span>
+                                </template>
+                            </Column>
+                            <Column field="room.name" header="Room" sortable>
+                                <template #body="slotProps">
+                                    <i class="pi pi-home text-primary mr-2" />
+                                    <span>{{ slotProps.data.room.name }}</span>
+                                </template>
+                            </Column>
+                            <Column field="user.name" header="Customer" sortable>
+                                <template #body="slotProps">
+                                    <i class="pi pi-user text-primary mr-2" />
+                                    <span>{{ slotProps.data.user.name }}</span>
+                                </template>
+                            </Column>
+                            <Column field="check_in_date" header="Check-In" sortable>
+                                <template #body="slotProps">
+                                    <i class="pi pi-calendar text-green-600 mr-2" />
+                                    <span>{{ formatDateTime(slotProps.data.check_in_date) }}</span>
+                                </template>
+                            </Column>
+                            <Column field="check_out_date" header="Check-Out" sortable>
+                                <template #body="slotProps">
+                                    <i class="pi pi-calendar text-red-600 mr-2" />
+                                    <span>{{ formatDateTime(slotProps.data.check_out_date) }}</span>
+                                </template>
+                            </Column>
+                            <Column field="payment_status" header="Payment Status" sortable>
+                                <template #body="slotProps">
+                                    <Tag
+                                        :value="slotProps.data.payment_status === 'paid' ? 'Paid' : 'Pending'"
+                                        :severity="slotProps.data.payment_status === 'paid' ? 'success' : 'warning'"
+                                    />
+                                </template>
+                            </Column>
+                            <Column header="Actions">
+                                <template #body="slotProps">
+                                    <div class="flex gap-2">
+                                        <Button label="View" icon="pi pi-eye" size="small" outlined @click="showDetails(slotProps.data)" />
+                                        <Button label="Modify" icon="pi pi-pencil" size="small" severity="info" outlined @click="showBookingModification(slotProps.data)" />
+                                        <Button label="Charges" icon="pi pi-dollar" size="small" severity="warning" outlined @click="showCustomCharges(slotProps.data)" />
+                                        <Button label="POS" icon="pi pi-shopping-cart" size="small" severity="success" outlined @click="showPOSCharges(slotProps.data)" />
+                                    </div>
+                                </template>
+                            </Column>
+                        </DataTable>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Booking Dialogs -->
+        <BookingDetailsDialog
+            :visible="showDialog"
+            :selectedBooking="selectedBooking"
+            @update:visible="showDialog = $event"
+            @update="statisticsBooking"
+        />
+        <BookingModificationDialog
+            :visible="isBookingModificationDialogVisible"
+            :booking="selectedBooking"
+            @update:visible="isBookingModificationDialogVisible = $event"
+            @booking-updated="handleBookingUpdate"
+        />
+        <CustomChargesDialog
+            :visible="isCustomChargesDialogVisible"
+            :booking="selectedBooking"
+            @update:visible="isCustomChargesDialogVisible = $event"
+            @charges-added="handleBookingUpdate"
+        />
+        <POSChargesDialog
+            :visible="isPOSChargesDialogVisible"
+            :booking="selectedBooking"
+            @update:visible="isPOSChargesDialogVisible = $event"
+            @charges-posted="handleBookingUpdate"
+        />
 
         <!-- Error Dialog -->
         <Dialog 
@@ -225,15 +312,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch, reactive, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useRouter } from 'vue-router';
 import AvailabilityCalendar from '@/components/dashboard/AvailabilityCalendar.vue';
 import OccupancyHeatmap from '@/components/dashboard/OccupancyHeatmap.vue';
 import RevPARWidget from '@/components/dashboard/RevPARWidget.vue';
+import axiosInstance from '@/service/AxiosInstance';
+import { useStore } from 'vuex';
+import { LOADING_SPINNER_SHOW_MUTATION } from '@/store/storeconstants';
+import { formatDateTime } from '@/utils/dateTimeFormatter';
+import BookingDetailsDialog from '@/components/BookingManagement/BookingDetailsDialog.vue';
+import BookingModificationDialog from '@/components/BookingManagement/BookingModificationDialog.vue';
+import CustomChargesDialog from '@/components/BookingManagement/CustomChargesDialog.vue';
+import POSChargesDialog from '@/components/pos/POSChargesDialog.vue';
 
 const router = useRouter();
 const toast = useToast();
+const store = useStore();
 
 const refreshing = ref(false);
 const showErrorDialog = ref(false);
@@ -250,7 +346,9 @@ const dashboardStats = ref({
     totalBookings: 89,
     checkInsToday: 23,
     adr: 45000,
-    adrChange: 8.2
+    adrChange: 8.2,
+    expectedCheckInsToday: 0,
+    expectedCheckOutsToday: 0
 });
 
 const systemStatus = ref({
@@ -302,10 +400,63 @@ const recentActivities = ref([
     }
 ]);
 
+// Booking related state (moved)
+const selectedBooking = ref(null);
+const showDialog = ref(false);
+const isBookingModificationDialogVisible = ref(false);
+const isCustomChargesDialogVisible = ref(false);
+const isPOSChargesDialogVisible = ref(false);
+const statisticsBookingResponse = ref({});
+const bookingsPager = reactive({ page: 1, rows: 10, total: 0 });
+const recentBookings = ref([]);
+const filteredBookings = computed(() => {
+    return recentBookings.value.filter(b => {
+        const q = searchQuery.value.trim().toLowerCase();
+        const matchesSearch = !q || [b.booking_id, b.user?.name, b.room?.name, b.guest_name]
+            .filter(Boolean)
+            .some(val => String(val).toLowerCase().includes(q));
+        const matchesStatus = !filters.status || b.status === filters.status;
+        const matchesPayment = !filters.payment || b.payment_status === filters.payment;
+        const matchesRange = isInRange(b, filters.dateRange);
+        return matchesSearch && matchesStatus && matchesPayment && matchesRange;
+    });
+});
+const searchQuery = ref('');
+const filters = reactive({ status: null, payment: null, dateRange: null });
+
+const statusOptions = [
+    { label: 'Pending', value: 'pending' },
+    { label: 'Checked In', value: 'checked_in' },
+    { label: 'Checked Out', value: 'checked_out' },
+    { label: 'Cancelled', value: 'cancelled' }
+];
+const paymentOptions = [
+    { label: 'Paid', value: 'paid' },
+    { label: 'Pending', value: 'pending' }
+];
+
+const isInRange = (booking, range) => {
+    if (!range || !Array.isArray(range) || range.length < 2 || !range[0] || !range[1]) return true;
+    const start = new Date(range[0]).getTime();
+    const end = new Date(range[1]).getTime();
+    const inDate = new Date(booking.check_in_date).getTime();
+    const outDate = new Date(booking.check_out_date).getTime();
+    // overlap if either check-in or check-out within range or range fully inside booking span
+    return (inDate >= start && inDate <= end) || (outDate >= start && outDate <= end) || (inDate <= start && outDate >= end);
+};
+
+const resetFilters = () => {
+    searchQuery.value = '';
+    filters.status = null;
+    filters.payment = null;
+    filters.dateRange = null;
+};
+
 let refreshInterval = null;
 
 onMounted(() => {
     loadDashboardData();
+    statisticsBooking(); // load bookings
     
     // Set up auto-refresh for system status and activities
     refreshInterval = setInterval(() => {
@@ -389,6 +540,58 @@ const viewAllActivity = () => {
     router.push('/activity-log');
 };
 
+const statisticsBooking = async () => {
+    const loaded = await pullStatistics(1);
+    if (!loaded) return;
+    const stats = statisticsBookingResponse.value;
+    // Build charts using latest stats
+    buildRoomTypeRevenueChart(stats.totalRevenueByRoomType);
+    buildCheckInOutChart(stats.checkInCheckOutStats);
+    buildBookingStatusChart();
+    // Update dashboardStats expected & actual figures if present
+    dashboardStats.value.checkInsToday = stats.checkInsToday || 0;
+    dashboardStats.value.checkOutsToday = stats.checkOutsToday || 0;
+    dashboardStats.value.expectedCheckInsToday = stats.expectedCheckInsToday || 0;
+    dashboardStats.value.expectedCheckOutsToday = stats.expectedCheckOutsToday || 0;
+    computeDeltas();
+};
+
+const pullStatistics = async (page = 1) => {
+    const token = JSON.parse(localStorage.getItem('userData') || '{}')?.token;
+    if (!token) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Authentication token missing. Please log in.', life: 3000 });
+        return false;
+    }
+    try {
+        store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
+        const { data } = await axiosInstance.get('/admin/statistics/booking', {
+            params: { page },
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        statisticsBookingResponse.value = data;
+        const pageData = data.recentBookings;
+        bookingsPager.page = pageData.current_page;
+        bookingsPager.rows = Number(pageData.per_page);
+        bookingsPager.total = pageData.total;
+        recentBookings.value = pageData.data;
+        filteredBookings.value = [...pageData.data];
+        return true;
+    } catch (error) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch booking statistics', life: 3000 });
+        console.error('Error fetching booking statistics:', error);
+        return false;
+    } finally {
+        store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
+    }
+};
+
+const onPage = (event) => { pullStatistics(event.page + 1); };
+const showDetails = (booking) => { selectedBooking.value = booking; showDialog.value = true; };
+const showBookingModification = (booking) => { selectedBooking.value = booking; isBookingModificationDialogVisible.value = true; };
+const showCustomCharges = (booking) => { selectedBooking.value = booking; isCustomChargesDialogVisible.value = true; };
+const showPOSCharges = (booking) => { selectedBooking.value = booking; isPOSChargesDialogVisible.value = true; };
+const handleBookingUpdate = () => { isBookingModificationDialogVisible.value = false; isCustomChargesDialogVisible.value = false; isPOSChargesDialogVisible.value = false; statisticsBooking(); };
+
 const onRevPARLoaded = (data) => {
     console.log('RevPAR data loaded:', data);
     if (data && data._raw) {
@@ -458,6 +661,136 @@ const formatRelativeTime = (date) => {
     if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     return 'Just now';
 };
+
+/* (Continuation - new advanced analytics logic) */
+// If dashboardStats already declared earlier, just augment expected keys if missing
+if (!('expectedCheckInsToday' in dashboardStats.value)) {
+    dashboardStats.value.expectedCheckInsToday = 0;
+    dashboardStats.value.expectedCheckOutsToday = 0;
+}
+
+// Chart reactive refs
+const roomTypeRevenueChart = ref({ labels: [], datasets: [] });
+const checkInOutChart = ref({ labels: [], datasets: [] });
+const bookingStatusChart = ref({ labels: [], datasets: [] });
+
+const roomTypeRevenueOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom' } },
+    scales: {
+        x: { stacked: true },
+        y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Revenue (₦)' } }
+    }
+};
+
+const checkInOutChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom' } },
+    scales: {
+        x: { stacked: false },
+        y: { beginAtZero: true, title: { display: true, text: 'Count' } }
+    }
+};
+
+const bookingStatusChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom' } }
+};
+
+const monthNameToNumber = (label) => {
+    const [monthName, year] = label.split(' ');
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return { year: Number(year), month: months.indexOf(monthName) + 1 };
+};
+
+const sortMonthLabels = (labels) => labels.slice().sort((a,b) => {
+    const A = monthNameToNumber(a); const B = monthNameToNumber(b);
+    if (A.year === B.year) return A.month - B.month; else return A.year - B.year;
+});
+
+const buildRoomTypeRevenueChart = (totalRevenueByRoomType = {}) => {
+    const monthLabels = sortMonthLabels(Object.keys(totalRevenueByRoomType));
+    const datasetsMap = {};
+    monthLabels.forEach((label, idx) => {
+        (totalRevenueByRoomType[label] || []).forEach(entry => {
+            if (!datasetsMap[entry.room_type]) {
+                datasetsMap[entry.room_type] = {
+                    label: entry.room_type,
+                    backgroundColor: entry.color_code || '#3b82f6',
+                    data: Array(monthLabels.length).fill(0),
+                    borderRadius: 4
+                };
+            }
+            datasetsMap[entry.room_type].data[idx] = entry.total_revenue;
+        });
+    });
+    roomTypeRevenueChart.value = { labels: monthLabels, datasets: Object.values(datasetsMap) };
+};
+
+const buildCheckInOutChart = (checkInCheckOutStats = {}) => {
+    const monthLabels = sortMonthLabels(Object.keys(checkInCheckOutStats));
+    const totals = []; const ins = []; const outs = [];
+    monthLabels.forEach(label => {
+        const rec = (checkInCheckOutStats[label] || [])[0] || {};
+        totals.push(Number(rec.total_bookings)||0);
+        ins.push(Number(rec.confirmed_check_ins)||0);
+        outs.push(Number(rec.confirmed_check_outs)||0);
+    });
+    checkInOutChart.value = {
+        labels: monthLabels,
+        datasets: [
+            { label: 'Total Bookings', backgroundColor: '#6366f1', data: totals },
+            { label: 'Check-Ins', backgroundColor: '#10b981', data: ins },
+            { label: 'Check-Outs', backgroundColor: '#f59e0b', data: outs }
+        ]
+    };
+};
+
+const buildBookingStatusChart = () => {
+    const counts = {};
+    recentBookings.value.forEach(b => { counts[b.status] = (counts[b.status]||0) + 1; });
+    const labels = Object.keys(counts);
+    const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+    bookingStatusChart.value = {
+        labels,
+        datasets: [ {
+            data: labels.map(l => counts[l]),
+            backgroundColor: labels.map((_,i) => palette[i % palette.length])
+        } ]
+    };
+};
+
+// Delta helpers
+const checkInDeltaClass = ref('');
+const checkInDeltaIcon = ref('');
+const checkInDeltaText = ref('');
+const checkOutDeltaClass = ref('');
+const checkOutDeltaIcon = ref('');
+const checkOutDeltaText = ref('');
+
+const computeDeltas = () => {
+    const ci = dashboardStats.value.checkInsToday || 0;
+    const ciExp = dashboardStats.value.expectedCheckInsToday || 0;
+    const co = dashboardStats.value.checkOutsToday || 0;
+    const coExp = dashboardStats.value.expectedCheckOutsToday || 0;
+    const ciDiff = ci - ciExp;
+    const coDiff = co - coExp;
+    const format = (diff) => diff === 0 ? 'On Target' : (diff > 0 ? `+${diff} Over` : `${diff} Under`);
+    // Check-ins
+    checkInDeltaText.value = format(ciDiff);
+    checkInDeltaClass.value = ciDiff >=0 ? 'positive' : 'negative';
+    checkInDeltaIcon.value = ciDiff >=0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down';
+    // Check-outs
+    checkOutDeltaText.value = format(coDiff);
+    checkOutDeltaClass.value = coDiff >=0 ? 'positive' : 'negative';
+    checkOutDeltaIcon.value = coDiff >=0 ? 'pi pi-arrow-up' : 'pi pi-arrow-down';
+};
+
+// Recompute booking status chart whenever recent bookings change
+watch(recentBookings, buildBookingStatusChart);
 </script>
 
 <style scoped>
@@ -554,6 +887,9 @@ const formatRelativeTime = (date) => {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
 }
+
+.stat-card.expected { background: var(--surface-card); color: var(--text-color); }
+.stat-card.expected .stat-icon { background: var(--surface-ground); }
 
 .stat-icon {
     width: 60px;
@@ -799,39 +1135,13 @@ const formatRelativeTime = (date) => {
     margin-bottom: 1rem;
 }
 
-@media (max-width: 1024px) {
-    .widget-section.half-width {
-        grid-column: 1 / -1;
-    }
-    
-    .header-content {
-        flex-direction: column;
-        gap: 1rem;
-        align-items: stretch;
-    }
-}
+.search-input { max-width: 300px; }
 
-@media (max-width: 768px) {
-    .enhanced-dashboard {
-        padding: 1rem;
-    }
-    
-    .quick-stats-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .stat-card {
-        padding: 1rem;
-    }
-    
-    .stat-icon {
-        width: 48px;
-        height: 48px;
-        font-size: 1.25rem;
-    }
-    
-    .stat-value {
-        font-size: 1.5rem;
-    }
-}
+.charts-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(320px,1fr)); gap: 1.5rem; }
+.chart-card { min-height: 360px; }
+.chart-card .p-3 { height: 300px; }
+
+.table-header > * { flex-shrink: 0; }
+.w-9rem { width: 9rem; }
+.w-13rem { width: 13rem; }
 </style>

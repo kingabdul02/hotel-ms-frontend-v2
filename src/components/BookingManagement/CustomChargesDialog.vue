@@ -3,24 +3,31 @@
         :visible="visible" 
         @update:visible="$emit('update:visible', $event)"
         modal 
-        :style="{ width: '90vw', maxWidth: '600px' }"
+        :style="{ width: '130vw', maxWidth: '900px' }"
         header="Add Custom Charges"
     >
+        <div class="dialog-info booking-charges-info">
+            Booking Charges: Add stay or administrative fees (late/early check-out, upgrades, damages, misc.) directly to this booking.
+        </div>
+
         <div class="charges-form">
             <div class="booking-info">
                 <h6>Booking Information</h6>
                 <div class="info-grid">
                     <div class="info-item">
-                        <strong>Guest:</strong> {{ booking.guestName }}
+                        <strong>Guest:</strong> {{ displayedBooking.guestName }}
                     </div>
                     <div class="info-item">
-                        <strong>Room:</strong> {{ booking.roomNumber }} ({{ booking.roomType }})
+                        <strong>Room:</strong> {{ displayedBooking.roomNumber }} ({{ displayedBooking.roomType }})
                     </div>
                     <div class="info-item">
-                        <strong>Check-in:</strong> {{ formatDate(booking.checkInDate) }}
+                        <strong>Check-in:</strong> {{ formatDate(displayedBooking.checkInDate) }}
                     </div>
                     <div class="info-item">
-                        <strong>Check-out:</strong> {{ formatDate(booking.checkOutDate) }}
+                        <strong>Check-out:</strong> {{ formatDate(displayedBooking.checkOutDate) }}
+                    </div>
+                    <div class="info-item">
+                        <strong>Stay Duration:</strong> {{ stayDuration }} {{ stayDuration === 1 ? 'night' : 'nights' }}
                     </div>
                 </div>
             </div>
@@ -75,12 +82,11 @@
                                 />
                             </div>
                             
-                            <div class="field-group">
+                            <div class="field-group quantity-group">
                                 <label>Quantity</label>
                                 <InputNumber 
                                     v-model="charge.quantity" 
                                     :min="1"
-                                    :max="10"
                                 />
                             </div>
                         </div>
@@ -206,6 +212,28 @@ const isFormValid = computed(() => {
     );
 });
 
+const displayedBooking = computed(() => {
+    const b = props.booking || {};
+    return {
+        guestName: b.guestName || b.guest_name || b.user?.name || 'N/A',
+        roomNumber: b.roomNumber || b.room?.name || b.room?.number || b.room_name || 'N/A',
+        roomType: b.roomType || b.room?.room_type?.name || b.room?.type?.name || b.room_type || 'N/A',
+        checkInDate: b.checkInDate || b.check_in_date || null,
+        checkOutDate: b.checkOutDate || b.check_out_date || null
+    };
+});
+
+const stayDuration = computed(() => {
+    const ci = displayedBooking.value.checkInDate;
+    const co = displayedBooking.value.checkOutDate;
+    if (!ci || !co) return 0;
+    const checkIn = new Date(ci);
+    const checkOut = new Date(co);
+    const diff = checkOut - checkIn;
+    if (diff <= 0) return 0;
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+});
+
 watch(() => props.visible, (newVal) => {
     if (newVal) {
         resetForm();
@@ -242,17 +270,10 @@ const removeChargeItem = (index) => {
 
 const saveCharges = async () => {
     showValidation.value = true;
-    
     if (!isFormValid.value) {
-        toast.add({
-            severity: 'warn',
-            summary: 'Validation Error',
-            detail: 'Please fill in all required fields',
-            life: 3000
-        });
+        toast.add({ severity: 'warn', summary: 'Validation Error', detail: 'Please fill in all required fields', life: 3000 });
         return;
     }
-    
     saving.value = true;
     try {
         const chargeItems = charges.value.map(charge => ({
@@ -262,44 +283,18 @@ const saveCharges = async () => {
             quantity: charge.quantity,
             total: charge.amount * charge.quantity
         }));
-        
-        const requestData = {
-            charges: chargeItems,
-            notes: notes.value,
-            addedBy: 'current_user', // This should come from auth context
-            addedAt: new Date().toISOString()
-        };
-        
-        const response = await bookingService.addBookingCharges(props.booking.id, requestData.charges);
-        
+        const requestData = { charges: chargeItems, notes: notes.value, addedBy: 'current_user', addedAt: new Date().toISOString() };
+        const bookingId = props.booking.id || props.booking.booking_id;
+        const response = await bookingService.addBookingCharges(bookingId, requestData.charges);
         if (response.success) {
-            toast.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: `Added ${totalItems.value} charge item(s) totaling ₦${formatCurrency(grandTotal.value)}`,
-                life: 3000
-            });
-            
-            emit('charges-added', {
-                charges: chargeItems,
-                total: grandTotal.value,
-                notes: notes.value
-            });
+            toast.add({ severity: 'success', summary: 'Success', detail: `Added ${totalItems.value} charge item(s) totaling ₦${formatCurrency(grandTotal.value)}`, life: 3000 });
+            emit('charges-added', { charges: chargeItems, total: grandTotal.value, notes: notes.value });
             close();
-        } else {
-            throw new Error(response.message || 'Failed to add charges');
-        }
+        } else { throw new Error(response.message || 'Failed to add charges'); }
     } catch (error) {
         console.error('Error adding charges:', error);
-        toast.add({
-            severity: 'error',
-            summary: 'Error',
-            detail: error.message || 'Failed to add charges to booking',
-            life: 5000
-        });
-    } finally {
-        saving.value = false;
-    }
+        toast.add({ severity: 'error', summary: 'Error', detail: error.message || 'Failed to add charges to booking', life: 5000 });
+    } finally { saving.value = false; }
 };
 
 const close = () => {
@@ -325,6 +320,8 @@ const formatCurrency = (amount) => {
     max-height: 70vh;
     overflow-y: auto;
 }
+
+.dialog-info { font-size: .75rem; line-height:1.2; padding:.5rem .75rem; border-radius:6px; margin-bottom:1rem; background: var(--surface-50); border-left:4px solid var(--primary-color); color: var(--text-color-secondary); }
 
 .booking-info {
     background: var(--surface-50);
@@ -381,9 +378,10 @@ const formatCurrency = (amount) => {
 
 .charge-fields {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 80px;
+    grid-template-columns: 2fr 1fr 1fr 120px;
     gap: 1rem;
     margin-bottom: 0.75rem;
+    align-items: flex-start;
 }
 
 .field-group {
@@ -396,6 +394,15 @@ const formatCurrency = (amount) => {
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--text-color);
+}
+
+.quantity-group {
+    min-width: 110px;
+}
+
+.quantity-group :deep(.p-inputnumber),
+.quantity-group :deep(input) {
+    width: 100%;
 }
 
 .charge-actions {
@@ -439,6 +446,16 @@ const formatCurrency = (amount) => {
 .notes-section h6 {
     margin-bottom: 0.75rem;
     color: var(--text-color);
+}
+
+@media (max-width: 960px) {
+    .charge-fields {
+        grid-template-columns: 2fr 1fr 1fr;
+    }
+    
+    .quantity-group {
+        grid-column: span 1;
+    }
 }
 
 @media (max-width: 768px) {

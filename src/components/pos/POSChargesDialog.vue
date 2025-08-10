@@ -3,10 +3,13 @@
         :visible="visible" 
         @update:visible="$emit('update:visible', $event)"
         modal 
-        :style="{ width: '90vw', maxWidth: '900px' }"
+        :style="{ width: '95vw', maxWidth: '1200px' }"
         header="POS Charges"
         :closable="false"
     >
+        <div class="dialog-info pos-charges-info">
+            POS Charges: Post outlet consumption (restaurant meals, bar drinks, spa, minibar, shop, etc.) to the guest's room bill.
+        </div>
         <div class="pos-charges-dialog">
             <div class="dialog-layout">
                 <!-- Booking Information -->
@@ -15,13 +18,13 @@
                         <h6>Booking Information</h6>
                         <div class="booking-details">
                             <div class="detail-row">
-                                <strong>Guest:</strong> {{ booking.guestName }}
+                                <strong>Guest:</strong> {{ displayedBooking.guestName }}
                             </div>
                             <div class="detail-row">
-                                <strong>Room:</strong> {{ booking.roomNumber }} ({{ booking.roomType }})
+                                <strong>Room:</strong> {{ displayedBooking.roomNumber }} ({{ displayedBooking.roomType }})
                             </div>
                             <div class="detail-row">
-                                <strong>Check-in:</strong> {{ formatDate(booking.checkInDate) }}
+                                <strong>Check-in:</strong> {{ formatDate(displayedBooking.checkInDate) }}
                             </div>
                             <div class="detail-row">
                                 <strong>Stay Duration:</strong> {{ stayDuration }} nights
@@ -233,13 +236,26 @@ const outlets = [
     { label: 'Other', value: 'other', icon: 'pi pi-plus' }
 ];
 
+const displayedBooking = computed(() => {
+    const b = props.booking || {};
+    return {
+        guestName: b.guestName || b.guest_name || b.user?.name || 'N/A',
+        roomNumber: b.roomNumber || b.room?.name || b.room?.number || b.room_name || 'N/A',
+        roomType: b.roomType || b.room?.room_type?.name || b.room?.type?.name || b.room_type || 'N/A',
+        checkInDate: b.checkInDate || b.check_in_date || null,
+        checkOutDate: b.checkOutDate || b.check_out_date || null,
+        id: b.id || b.booking_id
+    };
+});
+
 const stayDuration = computed(() => {
-    if (!props.booking.checkInDate || !props.booking.checkOutDate) return 0;
-    
-    const checkIn = new Date(props.booking.checkInDate);
-    const checkOut = new Date(props.booking.checkOutDate);
+    const ci = displayedBooking.value.checkInDate;
+    const co = displayedBooking.value.checkOutDate;
+    if (!ci || !co) return 0;
+    const checkIn = new Date(ci);
+    const checkOut = new Date(co);
     const diffTime = checkOut - checkIn;
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 });
 
 const filteredItems = computed(() => {
@@ -356,7 +372,6 @@ const clearCart = () => {
 
 const postCharges = async () => {
     if (cartItems.value.length === 0) return;
-    
     posting.value = true;
     try {
         const items = cartItems.value.map(cartItem => ({
@@ -367,53 +382,18 @@ const postCharges = async () => {
             unitPrice: cartItem.price,
             amount: cartItem.price * cartItem.quantity
         }));
-        
-        const charges = {
-            items,
-            subtotal: subtotal.value,
-            taxRate: taxRate.value,
-            taxAmount: taxAmount.value,
-            total: total.value,
-            notes: orderNotes.value,
-            outlet: selectedOutlet.value,
-            timestamp: new Date().toISOString()
-        };
-        
-        const response = await posService.addPOSCharges(
-            props.booking.id,
-            items,
-            selectedOutlet.value
-        );
-        
+        const charges = { items, subtotal: subtotal.value, taxRate: taxRate.value, taxAmount: taxAmount.value, total: total.value, notes: orderNotes.value, outlet: selectedOutlet.value, timestamp: new Date().toISOString() };
+        const bookingId = displayedBooking.value.id;
+        const response = await posService.addPOSCharges(bookingId, items, selectedOutlet.value);
         if (response.success) {
-            toast.add({
-                severity: 'success',
-                summary: 'Charges Posted',
-                detail: `₦${formatCurrency(total.value)} posted to room ${props.booking.roomNumber}`,
-                life: 3000
-            });
-            
-            emit('charges-posted', {
-                bookingId: props.booking.id,
-                charges,
-                outlet: getOutletLabel(selectedOutlet.value)
-            });
-            
+            toast.add({ severity: 'success', summary: 'Charges Posted', detail: `₦${formatCurrency(total.value)} posted to room ${displayedBooking.value.roomNumber}`, life: 3000 });
+            emit('charges-posted', { bookingId, charges, outlet: getOutletLabel(selectedOutlet.value) });
             close();
-        } else {
-            throw new Error(response.message || 'Failed to post charges');
-        }
+        } else { throw new Error(response.message || 'Failed to post charges'); }
     } catch (error) {
         console.error('Error posting POS charges:', error);
-        toast.add({
-            severity: 'error',
-            summary: 'Error',
-            detail: error.message || 'Failed to post charges to room',
-            life: 5000
-        });
-    } finally {
-        posting.value = false;
-    }
+        toast.add({ severity: 'error', summary: 'Error', detail: error.message || 'Failed to post charges to room', life: 5000 });
+    } finally { posting.value = false; }
 };
 
 const close = () => {
@@ -462,6 +442,7 @@ const formatCurrency = (amount) => {
     border: 1px solid var(--surface-border);
     border-radius: 8px;
     padding: 1rem;
+    word-break: break-word;
 }
 
 .booking-card h6 {
@@ -516,10 +497,16 @@ const formatCurrency = (amount) => {
 
 .pos-content {
     display: grid;
-    grid-template-columns: 1fr 350px;
+    grid-template-columns: 1fr 400px;
     gap: 1.5rem;
     flex: 1;
     min-height: 0;
+}
+
+@media (max-width: 1400px) {
+    .pos-content {
+        grid-template-columns: 1fr 360px;
+    }
 }
 
 .items-grid {
@@ -714,7 +701,7 @@ const formatCurrency = (amount) => {
 }
 
 .quantity {
-    min-width: 30px;
+    min-width: 32px;
     text-align: center;
     font-weight: 600;
 }
@@ -784,6 +771,8 @@ const formatCurrency = (amount) => {
     gap: 0.75rem;
 }
 
+.dialog-info { font-size:.75rem; line-height:1.2; padding:.5rem .75rem; border-radius:6px; margin-bottom:1rem; background: var(--surface-50); border-left:4px solid var(--primary-color); color: var(--text-color-secondary); }
+
 @media (max-width: 1024px) {
     .dialog-layout {
         grid-template-columns: 1fr;
@@ -823,5 +812,22 @@ const formatCurrency = (amount) => {
     .search-bar {
         width: 200px;
     }
+}
+
+@media (max-width: 600px) {
+  .cart-item {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 'info controls' 'total total';
+  }
+  .cart-item-info {
+    grid-area: info;
+  }
+  .cart-item-controls {
+    grid-area: controls;
+  }
+  .cart-item-total {
+    grid-area: total;
+    text-align: right;
+  }
 }
 </style>
