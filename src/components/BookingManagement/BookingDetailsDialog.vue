@@ -82,7 +82,8 @@ const handleCompletePayment = async () => {
   try {
     await axiosInstance.post(`/admin/complete-payment`, {
       booking_id: localBooking.value?.booking_id,
-      payment_method: selectedPaymentMethod.value
+      payment_method: selectedPaymentMethod.value,
+      amount: localBooking.value?.total_amount
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });

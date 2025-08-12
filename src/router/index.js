@@ -263,6 +263,12 @@ const routes = [
                 path: '/documentation',
                 name: 'documentation',
                 component: () => import('@/views/utilities/Documentation.vue')
+            },
+            {
+                path: '/revenue/dashboard',
+                name: 'revenuedashboard',
+                component: () => import('@/views/RevenueDashboard.vue'),
+                meta: { auth: true }
             }
         ]
     },

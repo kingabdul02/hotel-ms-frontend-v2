@@ -6,17 +6,15 @@ export class POSService {
     }
 
     /**
-     * Add POS charges to a guest's room account
-     * @param {string} bookingId - The booking ID
-     * @param {Array} items - Array of purchase items
-     * @param {string} outlet - The outlet name (Restaurant, Bar, Spa, Laundry)
-     * @returns {Promise} API response
+     * Post POS charges to guest room per API v2 spec
+     * @param {Object} payload - Charges payload { booking_id, outlet_id, items: [{ item_id, quantity, unit_price, modifications? }], server_id?, table_number?, notes? }
+     * @returns {Promise<Object>} API response
      */
-    async addPOSCharges(bookingId, items, outlet) {
+    async addPOSCharges(payload) {
         try {
             const response = await axiosInstance.post(
                 `${this.baseURL}/v2/pos/charges`,
-                { bookingId, items, outlet }
+                payload
             );
             return response.data;
         } catch (error) {
@@ -43,13 +41,15 @@ export class POSService {
     }
 
     /**
-     * Get POS outlets
-     * @returns {Promise} API response
+     * Get POS outlets with optional filters and pagination
+     * @param {Object} [params] - { name?, type?, status?, search?, page?, per_page? }
+     * @returns {Promise<Object>} API response
      */
-    async getPOSOutlets() {
+    async getPOSOutlets(params = {}) {
         try {
             const response = await axiosInstance.get(
-                `${this.baseURL}/v2/pos/outlets`
+                `${this.baseURL}/v2/pos/outlets`,
+                { params }
             );
             return response.data;
         } catch (error) {
@@ -59,14 +59,16 @@ export class POSService {
     }
 
     /**
-     * Get POS items for an outlet
-     * @param {string} outlet - The outlet name
-     * @returns {Promise} API response
+     * Get POS items grouped by category for a given outlet
+     * @param {number|string} outletId - The outlet ID
+     * @param {string|number} [category] - Category name (partial) or ID
+     * @returns {Promise<Object>} API response
      */
-    async getPOSItems(outlet) {
+    async getPOSItems(outletId, category) {
         try {
             const response = await axiosInstance.get(
-                `${this.baseURL}/v2/pos/items/${outlet}`
+                `${this.baseURL}/v2/pos/items`,
+                { params: { outlet_id: outletId, category } }
             );
             return response.data;
         } catch (error) {

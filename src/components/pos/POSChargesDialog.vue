@@ -37,14 +37,25 @@
                 <div class="pos-section">
                     <div class="outlet-selection">
                         <h6>Select Outlet</h6>
+                        <div class="outlet-toolbar">
+                            <div class="outlet-search">
+                                <IconField iconPosition="left">
+                                    <InputIcon class="pi pi-search" />
+                                    <InputText v-model="outletFilters.search" placeholder="Search outlets..." @keydown.enter.prevent="loadOutlets()" />
+                                </IconField>
+                            </div>
+                            <div class="outlet-actions">
+                                <Button label="Refresh" icon="pi pi-refresh" class="p-button-text" @click="loadOutlets" :loading="loadingOutlets" />
+                            </div>
+                        </div>
                         <div class="outlet-tabs">
                             <Button 
-                                v-for="outlet in outlets" 
-                                :key="outlet.value"
-                                :label="outlet.label"
-                                :icon="outlet.icon"
-                                @click="selectOutlet(outlet.value)"
-                                :class="['outlet-tab', { 'active': selectedOutlet === outlet.value }]"
+                                v-for="outlet in outlets"
+                                :key="outlet.id"
+                                :label="outlet.name"
+                                icon="pi pi-store"
+                                @click="selectOutlet(outlet)"
+                                :class="['outlet-tab', { 'active': selectedOutlet?.id === outlet.id }]"
                             />
                         </div>
                     </div>
@@ -53,7 +64,7 @@
                         <!-- Items Grid -->
                         <div class="items-grid">
                             <div class="items-header">
-                                <h6>{{ getOutletLabel(selectedOutlet) }} Items</h6>
+                                <h6>{{ selectedOutlet?.name || 'Outlet' }} Items</h6>
                                 <div class="search-bar">
                                     <InputText 
                                         v-model="searchQuery" 
@@ -65,24 +76,29 @@
                             </div>
 
                             <div class="items-container">
-                                <div 
-                                    v-for="item in filteredItems" 
-                                    :key="item.id"
-                                    class="item-card"
-                                    @click="addItem(item)"
-                                >
-                                    <div class="item-image">
-                                        <img v-if="item.image" :src="item.image" :alt="item.name" />
-                                        <i v-else class="pi pi-image item-placeholder"></i>
-                                    </div>
-                                    <div class="item-info">
-                                        <div class="item-name">{{ item.name }}</div>
-                                        <div class="item-price">₦{{ formatCurrency(item.price) }}</div>
-                                        <div v-if="item.description" class="item-description">
-                                            {{ item.description }}
+                                <template v-for="category in filteredCategories" :key="category.name">
+                                    <div class="category-header">{{ category.name }}</div>
+                                    <div class="category-grid">
+                                        <div 
+                                            v-for="item in category.items"
+                                            :key="item.id"
+                                            class="item-card"
+                                            @click="addItem(item)"
+                                        >
+                                            <div class="item-image">
+                                                <img v-if="item.image" :src="item.image" :alt="item.name" />
+                                                <i v-else class="pi pi-image item-placeholder"></i>
+                                            </div>
+                                            <div class="item-info">
+                                                <div class="item-name">{{ item.name }}</div>
+                                                <div class="item-price">₦{{ formatCurrency(item.price) }}</div>
+                                                <div v-if="item.description" class="item-description">
+                                                    {{ item.description }}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                </template>
                             </div>
 
                             <div v-if="loadingItems" class="items-loading">
@@ -217,24 +233,17 @@ const emit = defineEmits(['update:visible', 'charges-posted']);
 const posService = new POSService();
 const toast = useToast();
 
-const selectedOutlet = ref('');
+const selectedOutlet = ref(null);
 const loadingItems = ref(false);
+const loadingOutlets = ref(false);
 const posting = ref(false);
 const searchQuery = ref('');
 const orderNotes = ref('');
 const cartItems = ref([]);
-const availableItems = ref([]);
+const availableCategories = ref([]);
 const taxRate = ref(7.5); // VAT rate
-
-const outlets = [
-    { label: 'Restaurant', value: 'restaurant', icon: 'pi pi-home' },
-    { label: 'Bar', value: 'bar', icon: 'pi pi-glass' },
-    { label: 'Spa', value: 'spa', icon: 'pi pi-heart' },
-    { label: 'Laundry', value: 'laundry', icon: 'pi pi-circle' },
-    { label: 'Room Service', value: 'room_service', icon: 'pi pi-bell' },
-    { label: 'Business Center', value: 'business', icon: 'pi pi-briefcase' },
-    { label: 'Other', value: 'other', icon: 'pi pi-plus' }
-];
+const outlets = ref([]);
+const outletFilters = ref({ search: '', status: 'active', page: 1, per_page: 50 });
 
 const displayedBooking = computed(() => {
     const b = props.booking || {};
@@ -258,14 +267,18 @@ const stayDuration = computed(() => {
     return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 });
 
-const filteredItems = computed(() => {
-    if (!searchQuery.value) return availableItems.value;
-    
-    const query = searchQuery.value.toLowerCase();
-    return availableItems.value.filter(item => 
-        item.name.toLowerCase().includes(query) ||
-        (item.description && item.description.toLowerCase().includes(query))
-    );
+const filteredCategories = computed(() => {
+    if (!searchQuery.value) return availableCategories.value;
+    const q = searchQuery.value.toLowerCase();
+    // Filter items per category by search
+    const mapped = availableCategories.value.map(cat => ({
+        name: cat.name,
+        items: (cat.items || []).filter(it =>
+            it.name?.toLowerCase().includes(q) || it.description?.toLowerCase().includes(q)
+        )
+    }));
+    // hide empty categories
+    return mapped.filter(c => c.items.length > 0);
 });
 
 const totalQuantity = computed(() => {
@@ -291,9 +304,7 @@ watch(() => props.visible, (newVal) => {
 });
 
 watch(selectedOutlet, (newOutlet) => {
-    if (newOutlet) {
-        loadItems(newOutlet);
-    }
+    if (newOutlet?.id) loadItems(newOutlet.id);
 });
 
 onMounted(() => {
@@ -303,11 +314,12 @@ onMounted(() => {
 });
 
 const resetForm = () => {
-    selectedOutlet.value = '';
+    selectedOutlet.value = null;
     cartItems.value = [];
-    availableItems.value = [];
+    availableCategories.value = [];
     searchQuery.value = '';
     orderNotes.value = '';
+    loadOutlets();
 };
 
 const selectOutlet = (outlet) => {
@@ -315,15 +327,13 @@ const selectOutlet = (outlet) => {
     cartItems.value = []; // Clear cart when switching outlets
 };
 
-const loadItems = async (outlet) => {
+const loadItems = async (outletId) => {
     loadingItems.value = true;
     try {
-        const response = await posService.getPOSItems(outlet);
-        if (response.success) {
-            availableItems.value = response.data;
-        } else {
-            throw new Error(response.message || 'Failed to load items');
-        }
+        const response = await posService.getPOSItems(outletId);
+        if (!response?.success) throw new Error(response?.message || 'Failed to load items');
+        // response.data.categories: [{ name, items: [...] }]
+        availableCategories.value = response?.data?.categories || [];
     } catch (error) {
         console.error('Error loading POS items:', error);
         toast.add({
@@ -334,6 +344,22 @@ const loadItems = async (outlet) => {
         });
     } finally {
         loadingItems.value = false;
+    }
+};
+
+const loadOutlets = async () => {
+    loadingOutlets.value = true;
+    try {
+        const response = await posService.getPOSOutlets(outletFilters.value);
+        if (!response?.success) throw new Error(response?.message || 'Failed to load outlets');
+        // paginated response: data: { data: [ {id, name, ...} ], ... }
+        const list = response?.data?.data || response?.data || [];
+        outlets.value = Array.isArray(list) ? list : [];
+    } catch (error) {
+        console.error('Error loading POS outlets:', error);
+        toast.add({ severity: 'error', summary: 'Error', detail: error.message || 'Failed to load outlets', life: 3000 });
+    } finally {
+        loadingOutlets.value = false;
     }
 };
 
@@ -375,21 +401,24 @@ const postCharges = async () => {
     posting.value = true;
     try {
         const items = cartItems.value.map(cartItem => ({
-            id: cartItem.id,
-            name: cartItem.name,
-            description: cartItem.description || '',
+            item_id: cartItem.id,
             quantity: cartItem.quantity,
-            unitPrice: cartItem.price,
-            amount: cartItem.price * cartItem.quantity
+            unit_price: cartItem.price,
+            ...(cartItem.modifications?.length ? { modifications: cartItem.modifications } : {})
         }));
-        const charges = { items, subtotal: subtotal.value, taxRate: taxRate.value, taxAmount: taxAmount.value, total: total.value, notes: orderNotes.value, outlet: selectedOutlet.value, timestamp: new Date().toISOString() };
-        const bookingId = displayedBooking.value.id;
-        const response = await posService.addPOSCharges(bookingId, items, selectedOutlet.value);
-        if (response.success) {
-            toast.add({ severity: 'success', summary: 'Charges Posted', detail: `₦${formatCurrency(total.value)} posted to room ${displayedBooking.value.roomNumber}`, life: 3000 });
-            emit('charges-posted', { bookingId, charges, outlet: getOutletLabel(selectedOutlet.value) });
+        const payload = {
+            booking_id: displayedBooking.value.id,
+            outlet_id: selectedOutlet.value.id,
+            items,
+            notes: orderNotes.value || undefined
+            // server_id, table_number could be added here when UI supports it
+        };
+        const response = await posService.addPOSCharges(payload);
+        if (response?.success) {
+            toast.add({ severity: 'success', summary: 'Charges Posted', detail: response?.message || `₦${formatCurrency(total.value)} posted to room ${displayedBooking.value.roomNumber}`, life: 3000 });
+            emit('charges-posted', { bookingId: payload.booking_id, payload, outlet: selectedOutlet.value.name, result: response?.data });
             close();
-        } else { throw new Error(response.message || 'Failed to post charges'); }
+        } else { throw new Error(response?.message || 'Failed to post charges'); }
     } catch (error) {
         console.error('Error posting POS charges:', error);
         toast.add({ severity: 'error', summary: 'Error', detail: error.message || 'Failed to post charges to room', life: 5000 });
@@ -401,8 +430,9 @@ const close = () => {
 };
 
 const getOutletLabel = (value) => {
-    const outlet = outlets.find(o => o.value === value);
-    return outlet ? outlet.label : value;
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    return value?.name || '';
 };
 
 const formatDate = (date) => {
@@ -483,6 +513,10 @@ const formatCurrency = (amount) => {
     flex-wrap: wrap;
 }
 
+.outlet-toolbar { display:flex; align-items:center; justify-content: space-between; gap:.5rem; margin-bottom:.75rem; }
+.outlet-search { flex:1; min-width: 240px; }
+.outlet-actions { white-space: nowrap; }
+
 .outlet-tab {
     border: 1px solid var(--surface-border);
     background: var(--surface-card);
@@ -553,6 +587,9 @@ const formatCurrency = (amount) => {
     max-height: calc(70vh - 150px);
     padding: 0.5rem;
 }
+
+.category-header { font-weight:600; color: var(--text-color); margin: .75rem 0 .25rem; grid-column: 1/-1; }
+.category-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:1rem; }
 
 .item-card {
     background: var(--surface-card);
