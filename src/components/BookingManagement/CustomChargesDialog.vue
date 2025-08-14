@@ -118,6 +118,15 @@
                 </div>
             </div>
 
+            <div class="payment-section">
+                <h6>Payment</h6>
+                <div class="payment-row">
+                    <span class="label">Mark as Paid</span>
+                    <InputSwitch v-model="markAsPaid" />
+                    <span class="status" :class="markAsPaid ? 'paid' : 'pending'">{{ markAsPaid ? 'Paid' : 'Pending' }}</span>
+                </div>
+            </div>
+
             <div class="notes-section">
                 <h6>Additional Notes</h6>
                 <Textarea 
@@ -170,6 +179,7 @@ const toast = useToast();
 const saving = ref(false);
 const showValidation = ref(false);
 const notes = ref('');
+const markAsPaid = ref(false);
 
 const charges = ref([
     {
@@ -251,6 +261,7 @@ const resetForm = () => {
     ];
     notes.value = '';
     showValidation.value = false;
+    markAsPaid.value = false;
 };
 
 const addChargeItem = () => {
@@ -283,9 +294,15 @@ const saveCharges = async () => {
             quantity: charge.quantity,
             total: charge.amount * charge.quantity
         }));
-        const requestData = { charges: chargeItems, notes: notes.value, addedBy: 'current_user', addedAt: new Date().toISOString() };
+        const requestData = {
+            charges: chargeItems,
+            notes: notes.value,
+            addedBy: 'current_user',
+            addedAt: new Date().toISOString(),
+            payment_status: markAsPaid.value ? 'paid' : 'pending'
+        };
         const bookingId = props.booking.id || props.booking.booking_id;
-        const response = await bookingService.addBookingCharges(bookingId, requestData.charges);
+        const response = await bookingService.addBookingCharges(bookingId, requestData);
         if (response.success) {
             toast.add({ severity: 'success', summary: 'Success', detail: `Added ${totalItems.value} charge item(s) totaling ₦${formatCurrency(grandTotal.value)}`, life: 3000 });
             emit('charges-added', { charges: chargeItems, total: grandTotal.value, notes: notes.value });
@@ -447,6 +464,13 @@ const formatCurrency = (amount) => {
     margin-bottom: 0.75rem;
     color: var(--text-color);
 }
+
+.payment-section { margin-bottom: 1.5rem; }
+.payment-row { display:flex; align-items:center; gap:.75rem; }
+.payment-row .label { font-weight:500; color: var(--text-color); }
+.payment-row .status { font-size:.875rem; }
+.payment-row .status.paid { color: var(--green-500); }
+.payment-row .status.pending { color: var(--orange-500); }
 
 @media (max-width: 960px) {
     .charge-fields {

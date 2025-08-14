@@ -126,7 +126,7 @@ export function useBooking() {
       await statisticsBooking(pagingMeta.value.current_page);
       return true;
     } catch (err) {
-      errorToast('Reservation creation failed', err);
+      errorToast('Reservation creation failed', err.response.data.message || err);
       return false;
     } finally {
       isCreatingReservation.value = false;

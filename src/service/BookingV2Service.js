@@ -46,14 +46,18 @@ export class BookingV2Service {
     /**
      * Add custom charges to a booking
      * @param {string} bookingId - The booking ID
-     * @param {Array} charges - Array of charge items
+     * @param {Array|Object} payloadOrCharges - Either an array of charge items or a payload object
+     *  Accepted payload example: { charges: [...], payment_status?: 'pending'|'paid'|'failed'|'refunded'|'cancelled', notes?: string }
      * @returns {Promise} API response
      */
-    async addBookingCharges(bookingId, charges) {
+    async addBookingCharges(bookingId, payloadOrCharges) {
         try {
+            const body = Array.isArray(payloadOrCharges)
+                ? { charges: payloadOrCharges }
+                : payloadOrCharges;
             const response = await axiosInstance.post(
                 `${this.baseURL}/v2/bookings/${bookingId}/charges`,
-                { charges }
+                body
             );
             return response.data;
         } catch (error) {

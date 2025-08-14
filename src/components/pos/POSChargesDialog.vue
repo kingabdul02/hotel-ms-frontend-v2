@@ -176,6 +176,12 @@
                                 </div>
                             </div>
 
+                            <div class="payment-toggle">
+                                <span class="label">Mark as Paid</span>
+                                <InputSwitch v-model="markAsPaid" />
+                                <span class="status" :class="markAsPaid ? 'paid' : 'pending'">{{ markAsPaid ? 'Paid' : 'Pending' }}</span>
+                            </div>
+
                             <div class="order-notes">
                                 <label for="orderNotes">Order Notes</label>
                                 <Textarea 
@@ -244,6 +250,7 @@ const availableCategories = ref([]);
 const taxRate = ref(7.5); // VAT rate
 const outlets = ref([]);
 const outletFilters = ref({ search: '', status: 'active', page: 1, per_page: 50 });
+const markAsPaid = ref(false);
 
 const displayedBooking = computed(() => {
     const b = props.booking || {};
@@ -319,6 +326,7 @@ const resetForm = () => {
     availableCategories.value = [];
     searchQuery.value = '';
     orderNotes.value = '';
+    markAsPaid.value = false;
     loadOutlets();
 };
 
@@ -410,7 +418,8 @@ const postCharges = async () => {
             booking_id: displayedBooking.value.id,
             outlet_id: selectedOutlet.value.id,
             items,
-            notes: orderNotes.value || undefined
+            notes: orderNotes.value || undefined,
+            payment_status: markAsPaid.value ? 'paid' : 'pending'
             // server_id, table_number could be added here when UI supports it
         };
         const response = await posService.addPOSCharges(payload);
