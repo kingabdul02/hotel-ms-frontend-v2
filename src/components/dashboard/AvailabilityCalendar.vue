@@ -170,6 +170,62 @@
                         <label class="qb-label">Special Requests</label>
                         <textarea v-model="quickBookingForm.special_requests" rows="2" class="qb-textarea" placeholder="Optional notes..."></textarea>
                     </div>
+                    <!-- Discount controls -->
+                    <div class="qb-field full">
+                        <label class="qb-label">Discount</label>
+                        <div class="flex align-items-center gap-3 mb-2">
+                            <label class="flex align-items-center gap-2">
+                                <input type="radio" value="amount" v-model="quickBookingForm.discount_type" />
+                                <span>Amount (₦)</span>
+                            </label>
+                            <label class="flex align-items-center gap-2">
+                                <input type="radio" value="percent" v-model="quickBookingForm.discount_type" />
+                                <span>Percent (%)</span>
+                            </label>
+                        </div>
+                        <div class="flex gap-2">
+                            <input 
+                                class="qb-input" 
+                                type="number" 
+                                :min="0" 
+                                :max="quickBookingForm.discount_type === 'percent' ? 100 : subtotal"
+                                v-model.number="quickBookingForm.discount_value" 
+                                placeholder="Enter discount value" 
+                                style="max-width: 200px;"
+                            />
+                            <input 
+                                class="qb-input" 
+                                type="text" 
+                                v-model="quickBookingForm.discount_reason" 
+                                placeholder="Reason (optional)"
+                            />
+                        </div>
+                    </div>
+                    <!-- Pricing summary -->
+                    <div class="qb-field full" v-if="nights > 0">
+                        <div class="qb-summary">
+                            <div class="qb-summary-row">
+                                <span>Nights</span>
+                                <span>{{ nights }}</span>
+                            </div>
+                            <div class="qb-summary-row">
+                                <span>Rate (per night)</span>
+                                <span>₦{{ formatCurrency(nightlyRate) }}</span>
+                            </div>
+                            <div class="qb-summary-row">
+                                <span>Subtotal</span>
+                                <span>₦{{ formatCurrency(subtotal) }}</span>
+                            </div>
+                            <div class="qb-summary-row">
+                                <span>Discount</span>
+                                <span>-₦{{ formatCurrency(discountAmount) }}</span>
+                            </div>
+                            <div class="qb-summary-row total">
+                                <span>Total</span>
+                                <span>₦{{ formatCurrency(totalAfterDiscount) }}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="qb-actions">
                     <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="quickBookingVisible = false" />
@@ -216,7 +272,11 @@ const quickBookingForm = ref({
     room_id: null,
     no_of_guests: 1,
     guest_name: '',
-    special_requests: ''
+    special_requests: '',
+    // discounting
+    discount_type: 'amount', // 'amount' | 'percent'
+    discount_value: 0,
+    discount_reason: ''
 });
 const loadingRooms = ref(false);
 
@@ -237,6 +297,31 @@ const roomOptions = computed(() => (availableRooms.value || []).map(r => ({
     label: r.name || r.number || `Room #${r.id}`,
     value: r.id
 })));
+
+const selectedRoom = computed(() => (availableRooms.value || []).find(r => r.id === quickBookingForm.value.room_id));
+const nights = computed(() => {
+    const range = quickBookingDateRange.value;
+    if (!range || range.length < 2) return 0;
+    const start = new Date(range[0]);
+    const end = new Date(range[1]);
+    const diff = end.setHours(0,0,0,0) - start.setHours(0,0,0,0);
+    return Math.max(Math.ceil(diff / (1000*60*60*24)), 0);
+});
+const nightlyRate = computed(() => {
+    if (selectedRoom.value && typeof selectedRoom.value.price === 'number') return selectedRoom.value.price;
+    return selectedCell.value?.rate || 0;
+});
+const subtotal = computed(() => nightlyRate.value * nights.value);
+const clampedDiscountValue = computed(() => {
+    const v = Number(quickBookingForm.value.discount_value) || 0;
+    if (quickBookingForm.value.discount_type === 'percent') return Math.min(Math.max(v, 0), 100);
+    return Math.min(Math.max(v, 0), subtotal.value);
+});
+const discountAmount = computed(() => {
+    if (quickBookingForm.value.discount_type === 'percent') return Math.round((subtotal.value * clampedDiscountValue.value) / 100);
+    return clampedDiscountValue.value;
+});
+const totalAfterDiscount = computed(() => Math.max(subtotal.value - discountAmount.value, 0));
 
 watch(dateRange, (nv) => {
     if (nv && nv.length === 2 && nv[0] instanceof Date && nv[1] instanceof Date) {
@@ -345,6 +430,9 @@ const openQuickBooking = async () => {
     quickBookingForm.value.no_of_guests = 1;
     quickBookingForm.value.special_requests = '';
     quickBookingForm.value.guest_name = '';
+    quickBookingForm.value.discount_type = 'amount';
+    quickBookingForm.value.discount_value = 0;
+    quickBookingForm.value.discount_reason = '';
     quickBookingVisible.value = true;
     await loadAvailableRoomsForQuickBooking();
 };
@@ -393,7 +481,12 @@ const submitQuickBooking = async () => {
         no_of_guests: String(quickBookingForm.value.no_of_guests),
         special_requests: quickBookingForm.value.special_requests || 'None',
         guest_name: quickBookingForm.value.guest_name,
-        is_online_booking: false
+        is_online_booking: false,
+        ...(clampedDiscountValue.value > 0 ? {
+            discount_type: quickBookingForm.value.discount_type,
+            discount_value: clampedDiscountValue.value,
+            discount_reason: quickBookingForm.value.discount_reason || undefined
+        } : {})
     };
     try {
         const ok = await createReservation(payload);
@@ -588,6 +681,9 @@ watch(dateRange, (nv, ov) => {
 .qb-section { display:flex; justify-content: space-between; align-items:center; margin-bottom: .5rem; }
 .qb-value { font-weight:600; font-size: .85rem; }
 .qb-actions { margin-top: 1rem; display:flex; justify-content: flex-end; gap:.5rem; }
+.qb-summary { border: 1px solid var(--surface-border); border-radius: 6px; padding: .5rem .75rem; background: var(--surface-card); }
+.qb-summary-row { display:flex; justify-content: space-between; padding: .25rem 0; font-size: .85rem; }
+.qb-summary-row.total { font-weight: 700; color: var(--primary-color); }
 
 @media (max-width: 768px) {
     .card-header {

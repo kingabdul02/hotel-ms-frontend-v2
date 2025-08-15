@@ -172,10 +172,13 @@
                                 </div>
                             </div>
 
-                            <div class="payment-toggle">
-                                <span class="label">Mark as Paid</span>
-                                <InputSwitch v-model="markAsPaid" />
-                                <span class="status" :class="markAsPaid ? 'paid' : 'pending'">{{ markAsPaid ? 'Paid' : 'Pending' }}</span>
+                            <div class="payment-section">
+                                <h6>Payment</h6>
+                                <div class="payment-row">
+                                    <span class="label">Mark as Paid</span>
+                                    <InputSwitch v-model="markAsPaid" />
+                                    <span class="status" :class="markAsPaid ? 'paid' : 'pending'">{{ markAsPaid ? 'Paid' : 'Pending' }}</span>
+                                </div>
                             </div>
 
                             <div class="order-notes">
@@ -872,4 +875,11 @@ const formatCurrency = (amount) => {
     text-align: right;
   }
 }
+
+.payment-section { margin-bottom: 1.5rem; }
+.payment-row { display:flex; align-items:center; gap:.75rem; }
+.payment-row .label { font-weight:500; color: var(--text-color); }
+.payment-row .status { font-size:.875rem; }
+.payment-row .status.paid { color: var(--green-500); }
+.payment-row .status.pending { color: var(--orange-500); }
 </style>

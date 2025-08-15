@@ -185,6 +185,50 @@ const handleCompletePayment = async () => {
   }
 };
 
+// Discount-aware totals for display
+const displayedTotal = computed<number>(() => {
+  const lb = Number(localBooking.value?.total_amount ?? 0) || 0;
+  const bt = Number(bill.value?.totals?.total ?? 0) || 0;
+  // Prefer the booking total if present and lower (discounted), else fallback to bill total
+  if (lb && bt) return Math.min(lb, bt);
+  return lb || bt || 0;
+});
+
+const discountMeta = computed(() => {
+  const b: any = localBooking.value || {};
+  const type = b.discount_type || b.discountType;
+  const value = b.discount_value ?? b.discountValue;
+  const reason = b.discount_reason || b.discountReason;
+  return {
+    has: !!type && (Number(value) || 0) > 0,
+    type,
+    value: Number(value) || 0,
+    reason: reason || ''
+  };
+});
+
+const nightsForEst = computed(() => {
+  const start = localBooking.value?.check_in_date ? new Date(localBooking.value.check_in_date) : null;
+  const end = localBooking.value?.check_out_date ? new Date(localBooking.value.check_out_date) : null;
+  if (!start || !end) return Number(bill.value?.booking?.no_of_nights ?? 0) || 0;
+  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+  return Math.max(Math.ceil((e - s) / (1000 * 60 * 60 * 24)), 0);
+});
+
+const accommodationTotalForEst = computed(() => {
+  const fromBill = Number(bill.value?.charges?.accommodation?.total ?? 0) || 0;
+  const fromBooking = Number(localBooking.value?.total_amount ?? 0) || 0;
+  if (fromBill && fromBooking) return Math.min(fromBill, fromBooking);
+  return fromBooking || fromBill || 0;
+});
+
+const estimatedRatePerNight = computed(() => {
+  const n = nightsForEst.value || 1;
+  const total = accommodationTotalForEst.value || 0;
+  return n > 0 ? total / n : total;
+});
+
 // Handle checkout with payment check
 const handleCheckOutWithPaymentCheck = async () => {
   const status = bill.value?.payment_status ?? localBooking.value?.payment_status;
@@ -271,7 +315,11 @@ const handleCheckInGuest = async () => {
                 </div>
                 <div class="status-item">
                   <i class="pi pi-money-bill mr-2"></i>
-                  <span class="price-text">{{ formatCurrency((bill?.totals?.total ?? localBooking.total_amount) ?? 0) }}</span>
+                  <span class="price-text">{{ formatCurrency(displayedTotal) }}</span>
+                </div>
+                <div class="status-item" v-if="discountMeta.has">
+                  <i class="pi pi-tag mr-2"></i>
+                  <Tag severity="info" :value="discountMeta.type === 'percent' ? (discountMeta.value + '% off') : (formatCurrency(discountMeta.value) + ' off')" />
                 </div>
                 <div class="status-item">
                   <i class="pi pi-clock mr-2"></i>
@@ -355,29 +403,36 @@ const handleCheckInGuest = async () => {
         <h3 class="mb-3">Bill Breakdown</h3>
         <div v-if="billLoading" class="p-3 surface-100 border-round">Loading bill...</div>
         <div v-else-if="billError" class="p-3 surface-100 border-round text-red-600">{{ billError }}</div>
-        <div v-else-if="bill" class="grid">
+        <div v-else-if="bill" class="grid align-items-stretch equal-height-cards">
           <div class="col-12 md:col-4">
-            <Card>
+            <Card class="card-full">
               <template #title>Summary</template>
               <template #content>
                 <div class="flex flex-column gap-2">
                   <div class="flex justify-content-between"><span>Subtotal</span><strong>{{ formatCurrency(bill.totals?.subtotal || 0) }}</strong></div>
                   <div class="flex justify-content-between"><span>Tax</span><strong>{{ formatCurrency(bill.totals?.tax || 0) }}</strong></div>
-                  <div class="flex justify-content-between"><span>Total</span><strong class="text-primary">{{ formatCurrency((bill.totals?.total ?? localBooking.total_amount) ?? 0) }}</strong></div>
+                  <div class="flex justify-content-between" v-if="(bill.totals?.discount ?? (discountMeta.has ? discountMeta.value : 0))">
+                    <span>Discount</span>
+                    <strong class="text-red-600">-{{ formatCurrency(bill.totals?.discount ?? discountMeta.value) }}</strong>
+                  </div>
+                  <div class="flex justify-content-between"><span>Total</span><strong class="text-primary">{{ formatCurrency(displayedTotal) }}</strong></div>
                   <div class="flex justify-content-between"><span>Paid</span><strong class="text-green-600">{{ formatCurrency(bill.totals?.paid || 0) }}</strong></div>
                   <div class="flex justify-content-between"><span>Balance</span><strong class="text-orange-600">{{ formatCurrency(bill.totals?.balance ?? 0) }}</strong></div>
+                  <div v-if="discountMeta.has && discountMeta.reason" class="mt-1 text-600" style="font-size:.8rem;">
+                    Reason: {{ discountMeta.reason }}
+                  </div>
                 </div>
               </template>
             </Card>
           </div>
           <div class="col-12 md:col-8" v-if="bill.charges?.accommodation">
-            <Card>
+            <Card class="card-full">
               <template #title>Accommodation</template>
               <template #content>
                 <div class="mb-2 flex justify-content-end gap-3 text-600">
                   <span>Subtotal: <strong>{{ formatCurrency(bill.charges.accommodation.subtotal || 0) }}</strong></span>
                   <span>Tax: <strong>{{ formatCurrency(bill.charges.accommodation.tax || 0) }}</strong></span>
-                  <span>Total: <strong>{{ formatCurrency(bill.charges.accommodation.total || 0) }}</strong></span>
+                  <span>Accommodation Total (before discount): <strong>{{ formatCurrency(bill.charges.accommodation.total || 0) }}</strong></span>
                 </div>
                 <div v-if="!bill.charges.accommodation.lines?.length" class="flex flex-column gap-2 pb-2">
                   <!-- <div class="text-600 mb-2">Nightly breakdown not provided. Estimated details based on booking:</div> -->
@@ -387,11 +442,19 @@ const handleCheckInGuest = async () => {
                   </div>
                   <div class="flex justify-content-between border-bottom-1 surface-border pb-2">
                     <span>Estimated Rate/Night</span>
-                    <span>{{ formatCurrency(((bill.charges.accommodation.total || 0) / (Number(bill.booking?.no_of_nights)||1)) || 0) }}</span>
+                    <span>{{ formatCurrency(estimatedRatePerNight) }}</span>
                   </div>
                   <div class="flex justify-content-between">
-                    <span>Estimated Total</span>
+                    <span>Accommodation Total (before discount)</span>
                     <span>{{ formatCurrency(bill.charges.accommodation.total || 0) }}</span>
+                  </div>
+                  <div class="flex justify-content-between" v-if="bill.totals?.discount">
+                    <span>Discount</span>
+                    <span class="text-red-600">-{{ formatCurrency(bill.totals.discount) }}</span>
+                  </div>
+                  <div class="flex justify-content-between">
+                    <span>Net Total</span>
+                    <span class="text-primary">{{ formatCurrency(displayedTotal) }}</span>
                   </div>
                 </div>
                 <div v-else class="flex flex-column gap-2">
@@ -540,4 +603,10 @@ const handleCheckInGuest = async () => {
 
 <style scoped>
 @import '@/styles/booking-management.css';
+
+/* Equal height cards for Summary and Accommodation */
+.equal-height-cards { align-items: stretch; }
+.card-full { height: 100%; display: flex; flex-direction: column; }
+.card-full :deep(.p-card-body) { display: flex; flex-direction: column; height: 100%; }
+.card-full :deep(.p-card-content) { margin-top: auto; }
 </style>
