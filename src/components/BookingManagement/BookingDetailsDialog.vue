@@ -11,6 +11,7 @@ import { useToast } from 'primevue/usetoast';
 import axiosInstance from '@/service/AxiosInstance';
 import { formatDateTime } from '@/utils/dateTimeFormatter';
 import { formatCurrency } from '@/utils/currencyFormatter';
+import { humanizePaymentStatus } from '@/utils/paymentStatus';
 import { POSService } from '@/service/POSService';
 import { bookingChargeCategories as chargeCategories } from '@/enum/bookingChargeCategories';
 
@@ -64,15 +65,7 @@ const fetchBill = async () => {
   }
 };
 
-// Helpers
-const humanizePaymentStatus = (status?: string | null): string => {
-  if (!status) return 'Unknown';
-  return String(status)
-    .replace(/_/g, ' ')
-    .split(' ')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-};
+// Helpers are imported from utils
 
 // Watch for changes in props and update local state
 watch(() => props.selectedBooking, (newBooking) => {

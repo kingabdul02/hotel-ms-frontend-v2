@@ -13,6 +13,7 @@ import Menu from 'primevue/menu';
 import { useToast } from 'primevue/usetoast';
 import { formatDateTime } from '@/utils/dateTimeFormatter';
 import { formatCurrency } from '@/utils/currencyFormatter';
+import { humanizePaymentStatus } from '@/utils/paymentStatus';
 
 const props = defineProps<{
   value: any[];
@@ -245,7 +246,7 @@ const actionMenuItems = computed(() => {
 
       <Column header="Payment Status">
         <template #body="{ data }">
-          <Tag :value="data.payment_status.charAt(0).toUpperCase() + data.payment_status.slice(1).toLowerCase()" :severity="data.payment_status === 'paid' ? 'success' : 'warning'" />
+          <Tag :value="humanizePaymentStatus(data.payment_status)" :severity="data.payment_status === 'paid' ? 'success' : (data.payment_status === 'partially_paid' ? 'info' : 'warning')" />
         </template>
       </Column>
 
