@@ -36,13 +36,9 @@
                 <!-- POS Interface -->
                 <div class="pos-section">
                     <div class="outlet-selection">
-                        <h6>Select Outlet</h6>
                         <div class="outlet-toolbar">
                             <div class="outlet-search">
-                                <IconField iconPosition="left">
-                                    <InputIcon class="pi pi-search" />
-                                    <InputText v-model="outletFilters.search" placeholder="Search outlets..." @keydown.enter.prevent="loadOutlets()" />
-                                </IconField>
+                                <h6>Select Outlet</h6>
                             </div>
                             <div class="outlet-actions">
                                 <Button label="Refresh" icon="pi pi-refresh" class="p-button-text" @click="loadOutlets" :loading="loadingOutlets" />

@@ -5,12 +5,14 @@ import Card from 'primevue/card';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 import Dropdown from 'primevue/dropdown';
+import InputNumber from 'primevue/inputnumber';
 import { useBooking } from '@/composables/useBooking';
 import { useToast } from 'primevue/usetoast';
 import axiosInstance from '@/service/AxiosInstance';
 import { formatDateTime } from '@/utils/dateTimeFormatter';
 import { formatCurrency } from '@/utils/currencyFormatter';
 import { POSService } from '@/service/POSService';
+import { bookingChargeCategories as chargeCategories } from '@/enum/bookingChargeCategories';
 
 // Define props with TypeScript validation
 const props = defineProps<{
@@ -86,11 +88,26 @@ watch(() => props.visible, (isOpen) => {
 // Payment dialog state
 const showPaymentDialog = ref(false);
 const selectedPaymentMethod = ref('');
+const paymentAmount = ref<number>(0);
 const paymentMethods = [
   { label: 'Cash', value: 'cash' },
   { label: 'POS', value: 'pos' },
   { label: 'Transfer', value: 'transfer' }
 ];
+
+// Computed current balance (fallback to total amount if bill missing)
+const currentBalance = computed<number>(() => {
+  const fromBill = bill.value?.totals?.balance;
+  const fallback = localBooking.value?.total_amount ?? 0;
+  return typeof fromBill === 'number' ? fromBill : (fromBill ?? fallback ?? 0);
+});
+
+// Initialize amount when payment dialog opens
+watch(showPaymentDialog, (open) => {
+  if (open) {
+    paymentAmount.value = Number(currentBalance.value || 0);
+  }
+});
 
 // Handle payment completion
 const handleCompletePayment = async () => {
@@ -99,6 +116,17 @@ const handleCompletePayment = async () => {
       severity: 'warn', 
       summary: 'Warning', 
       detail: 'Please select a payment method', 
+      life: 3000 
+    });
+    return;
+  }
+
+  // Validate amount
+  if (!paymentAmount.value || paymentAmount.value <= 0) {
+    toast.add({ 
+      severity: 'warn', 
+      summary: 'Invalid amount', 
+      detail: 'Please enter a valid payment amount', 
       life: 3000 
     });
     return;
@@ -118,10 +146,21 @@ const handleCompletePayment = async () => {
   }
 
   try {
+    // Guard against overpayment
+    if (paymentAmount.value > currentBalance.value) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Amount too high',
+        detail: 'Payment amount cannot exceed outstanding balance',
+        life: 3000
+      });
+      return;
+    }
+
     await axiosInstance.post(`/admin/complete-payment`, {
       booking_id: localBooking.value?.booking_id,
       payment_method: selectedPaymentMethod.value,
-      amount: bill.value?.totals?.balance ?? localBooking.value?.total_amount
+  amount: paymentAmount.value
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -136,6 +175,7 @@ const handleCompletePayment = async () => {
     // Close the payment dialog
     showPaymentDialog.value = false;
     selectedPaymentMethod.value = '';
+  paymentAmount.value = 0;
     
     // Emit update to refresh the booking data from parent
     emits('update');
@@ -385,7 +425,7 @@ const handleCheckInGuest = async () => {
                   </div>
                   <div v-for="(c, i) in bill.charges.booking_charges" :key="i" class="flex py-2 border-bottom-1 surface-border">
                     <div class="w-2">{{ c.date }}</div>
-                    <div class="w-5">{{ c.description }} <span v-if="c.category" class="text-600">({{ c.category }})</span></div>
+                    <div class="w-5">{{ c.description }} <span v-if="c.category" class="text-600">({{ chargeCategories.find(cat => cat.value === c.category)?.label }})</span></div>
                     <div class="w-1 text-right">{{ c.quantity }}</div>
                     <div class="w-2 text-right">{{ formatCurrency(c.unit_price) }}</div>
                     <div class="w-2 text-right">{{ formatCurrency(c.total) }}</div>
@@ -453,10 +493,26 @@ const handleCheckInGuest = async () => {
         <div class="mb-3 p-3 surface-100 border-round">
           <div class="flex justify-content-between align-items-center">
             <span class="font-semibold">Amount Due:</span>
-            <span class="text-xl font-bold text-primary">{{ formatCurrency((bill?.totals?.balance ?? localBooking?.total_amount) ?? 0) }}</span>
+            <span class="text-xl font-bold text-primary">{{ formatCurrency(currentBalance) }}</span>
           </div>
         </div>
         <div class="flex flex-column gap-3">
+          <label for="payment-amount" class="font-semibold">Amount</label>
+          <InputNumber
+            id="payment-amount"
+            v-model="paymentAmount"
+            mode="currency"
+            currency="NGN"
+            locale="en-NG"
+            :max="currentBalance"
+            :min="0"
+            class="w-full"
+            input-class="w-full"
+            :useGrouping="true"
+            placeholder="Enter amount"
+          />
+          <small class="text-600">Defaults to outstanding balance. You can enter a partial amount.</small>
+
           <label for="payment-method" class="font-semibold">Payment Method</label>
           <Dropdown
             id="payment-method"
@@ -476,12 +532,12 @@ const handleCheckInGuest = async () => {
           label="Cancel"
           icon="pi pi-times"
           text
-          @click="showPaymentDialog = false; selectedPaymentMethod = ''"
+          @click="showPaymentDialog = false; selectedPaymentMethod = ''; paymentAmount = 0"
         />
         <Button
           label="Complete Payment"
           icon="pi pi-check"
-          :disabled="!selectedPaymentMethod"
+          :disabled="!selectedPaymentMethod || !paymentAmount || paymentAmount <= 0"
           @click="handleCompletePayment"
         />
       </div>

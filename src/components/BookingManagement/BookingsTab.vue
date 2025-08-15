@@ -18,6 +18,10 @@ import { useToast } from 'primevue/usetoast';
 import BookingDetailsDialog from './BookingDetailsDialog.vue';
 import StatisticsCards from './StatisticsCards.vue';
 import NewReservationDialog from './NewReservationDialog.vue';
+import RecentBookingsTable from './RecentBookingsTable.vue';
+import BookingModificationDialog from './BookingModificationDialog.vue';
+import CustomChargesDialog from './CustomChargesDialog.vue';
+import POSChargesDialog from '@/components/pos/POSChargesDialog.vue';
 import { useBooking } from '@/composables/useBooking';
 import { formatDateTime } from '@/utils/dateTimeFormatter';
 import { formatCurrency } from '@/utils/currencyFormatter';
@@ -78,6 +82,9 @@ const isLoading = ref(false);
 const showDetailsDlg = ref(false);
 const selectedBooking = ref(null);
 const showReservationDialog = ref(false);
+const isBookingModificationDialogVisible = ref(false);
+const isCustomChargesDialogVisible = ref(false);
+const isPOSChargesDialogVisible = ref(false);
 
 /* --------------- helpers --------------- */
 const apiDate = (d: Date | undefined) => {
@@ -187,6 +194,34 @@ const openDetails = (row: any) => {
 const openReservationDialog = () => {
   showReservationDialog.value = true;
 };
+
+/* --------------- action handlers from menu --------------- */
+const showBookingModification = (booking: any) => {
+  if (booking?.is_checked_out) {
+    toast.add({ severity: 'warn', summary: 'Not allowed', detail: 'Booking is checked out. You cannot modify this booking.', life: 3000 });
+    return;
+  }
+  selectedBooking.value = booking;
+  isBookingModificationDialogVisible.value = true;
+};
+
+const showCustomCharges = (booking: any) => {
+  if (booking?.is_checked_out) {
+    toast.add({ severity: 'warn', summary: 'Not allowed', detail: 'Booking is checked out. You cannot add custom charges.', life: 3000 });
+    return;
+  }
+  selectedBooking.value = booking;
+  isCustomChargesDialogVisible.value = true;
+};
+
+const showPOSCharges = (booking: any) => {
+  if (booking?.is_checked_out) {
+    toast.add({ severity: 'warn', summary: 'Not allowed', detail: 'Booking is checked out. You cannot add POS charges.', life: 3000 });
+    return;
+  }
+  selectedBooking.value = booking;
+  isPOSChargesDialogVisible.value = true;
+};
 </script>
 
 <template>
@@ -199,191 +234,26 @@ const openReservationDialog = () => {
   />
 
   <Card class="mt-4">
-    <template #title>
-      <div class="flex justify-content-between align-items-center w-full">
-        <div class="flex align-items-center">
-          <span class="pi pi-list text-primary text-xl mr-2" /> Recent Bookings
-        </div>
-        <Button
-          label="New Reservation"
-          icon="pi pi-plus"
-          class="p-button-success"
-          @click="openReservationDialog"
-        />
-      </div>
-    </template>
-
     <template #content>
-      <!-- unified filter bar -->
-      <div class="flex flex-column md:flex-row gap-3 mb-3">
-        <InputText
-          v-model="searchQuery"
-          placeholder="Search…"
-          class="w-full md:w-16rem"
-        />
-        <Dropdown
-          v-model="filterRoomTypeId"
-          :options="roomTypeOptions"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Room type"
-          class="w-full md:w-12rem"
-        />
-        <Dropdown
-          v-model="filterPaymentStatus"
-          :options="paymentOptions"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Payment"
-          class="w-full md:w-10rem"
-        />
-        <Dropdown
-          v-model="filterBookingStatus"
-          :options="bookingStatusOptions"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Booking Status"
-          class="w-full md:w-12rem"
-        />
-      </div>
-      
-      <!-- Date filter row -->
-      <div class="flex flex-column md:flex-row gap-3 mb-3">
-        <Calendar
-          v-model="filterDateRange"
-          selectionMode="range"
-          dateFormat="yy-mm-dd"
-          showIcon
-          placeholder="Check-in range"
-          class="w-full md:w-16rem"
-          :manualInput="false"
-          :showButtonBar="true"
-        />
-        <Calendar
-          v-model="filterCheckoutRange"
-          selectionMode="range"
-          dateFormat="yy-mm-dd"
-          showIcon
-          placeholder="Check-out range"
-          class="w-full md:w-16rem"
-          :manualInput="false"
-          :showButtonBar="true"
-        />
-        <Calendar
-          v-model="filterBookingDateRange"
-          selectionMode="range"
-          dateFormat="yy-mm-dd"
-          showIcon
-          placeholder="Booking date range"
-          class="w-full md:w-16rem"
-          :manualInput="false"
-          :showButtonBar="true"
-        />
-        <Button
-          icon="pi pi-filter-slash"
-          label="Reset"
-          @click="resetFilters"
-          class="p-button-secondary md:ml-auto"
-        />
-      </div>
-
-      <div v-if="isLoading" class="flex justify-content-center py-4">
-        <ProgressSpinner />
-      </div>
-
-      <DataTable
-        v-else
+      <RecentBookingsTable
         :value="recentBookings"
+        :pagingMeta="pagingMeta"
+        :loading="isLoading"
         :rows="rows"
-        :rowsPerPageOptions="[10, 20, 50, 100]"
-        :totalRecords="pagingMeta.total"
-        :first="(pagingMeta.current_page - 1) * pagingMeta.per_page"
-        lazy
-        paginator
-        @page="onPage"
+        :rowsPerPageOptions="[10,20,50,100]"
+        :showModify="true"
+        :showCustomCharges="true"
+        :showPOSCharges="true"
+        @request-fetch="(p) => { rows = p.rows; statisticsBooking(p.page, p.filters, rows); }"
+        @open-details="openDetails"
+  @modify-booking="showBookingModification"
+  @add-custom-charges="showCustomCharges"
+  @add-pos-charges="showPOSCharges"
       >
-        <Column field="booking_id" header="ID" sortable />
-
-        <Column header="Customer" sortable>
-          <template #body="{ data }">
-            <i class="pi pi-user mr-1 text-primary" /> {{ data.is_online_booking ? data.user?.name : data.guest_name }}
-          </template>
-        </Column>
-
-        <Column header="Room" sortable>
-          <template #body="{ data }">
-            <i class="pi pi-home mr-1 text-primary" /> {{ data.room?.name }}
-          </template>
-        </Column>
-
-        <Column header="Booking Date">
-          <template #body="{ data }">{{
-            formatDateTime(data.created_at)
-          }}</template>
-        </Column>
-
-        <Column header="Check-In">
-          <template #body="{ data }">{{
-            formatDateTime(data.check_in_date)
-          }}</template>
-        </Column>
-
-        <Column header="Check-Out">
-          <template #body="{ data }">{{
-            formatDateTime(data.check_out_date)
-          }}</template>
-        </Column>
-
-        <Column header="Amount">
-          <template #body="{ data }">{{
-            formatCurrency(data.total_amount)
-          }}</template>
-        </Column>
-
-        <Column header="Booking Status">
-          <template #body="{ data }">
-            <Tag
-              :value="
-          data.is_checked_out
-            ? 'Checked Out'
-            : data.is_checked_in
-            ? 'Checked In'
-            : data.is_confirmed
-            ? 'Confirmed'
-            : 'Pending'
-              "
-              :severity="
-          data.is_checked_out
-            ? 'info'
-            : data.is_checked_in
-            ? 'success'
-            : data.is_confirmed
-            ? 'success'
-            : 'warning'
-              "
-            />
-          </template>
-        </Column>
-
-        <Column header="Payment Status">
-          <template #body="{ data }">
-            <Tag
-                :value="data.payment_status.charAt(0).toUpperCase() + data.payment_status.slice(1).toLowerCase()"
-              :severity="data.payment_status === 'paid' ? 'success' : 'warning'"
-            />
-          </template>
-        </Column>
-
-        <Column header="Actions">
-          <template #body="{ data }">
-            <Button
-              icon="pi pi-eye"
-              class="p-button-sm p-button-outlined"
-              @click="openDetails(data)"
-            />
-          </template>
-        </Column>
-      </DataTable>
+        <template #header-actions>
+          <Button label="New Reservation" icon="pi pi-plus" class="p-button-success" @click="openReservationDialog" />
+        </template>
+      </RecentBookingsTable>
     </template>
   </Card>
 
@@ -397,6 +267,26 @@ const openReservationDialog = () => {
   <NewReservationDialog
     v-model:visible="showReservationDialog"
     @reservationCreated="fetchBookings(1)"
+  />
+
+  <!-- Action dialogs -->
+  <BookingModificationDialog
+    :visible="isBookingModificationDialogVisible"
+    :booking="selectedBooking"
+    @update:visible="isBookingModificationDialogVisible = $event"
+    @booking-updated="() => { isBookingModificationDialogVisible = false; fetchBookings(1); }"
+  />
+  <CustomChargesDialog
+    :visible="isCustomChargesDialogVisible"
+    :booking="selectedBooking"
+    @update:visible="isCustomChargesDialogVisible = $event"
+    @charges-added="() => { isCustomChargesDialogVisible = false; fetchBookings(1); }"
+  />
+  <POSChargesDialog
+    :visible="isPOSChargesDialogVisible"
+    :booking="selectedBooking"
+    @update:visible="isPOSChargesDialogVisible = $event"
+    @charges-posted="() => { isPOSChargesDialogVisible = false; fetchBookings(1); }"
   />
 </template>
 

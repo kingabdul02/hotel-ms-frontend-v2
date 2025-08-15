@@ -7,7 +7,7 @@
         header="Add Custom Charges"
     >
         <div class="dialog-info booking-charges-info">
-            Booking Charges: Add stay or administrative fees (late/early check-out, upgrades, damages, misc.) directly to this booking.
+            Booking Charges — Applied directly to the booking — usually linked to stay-related or administrative adjustments.
         </div>
 
         <div class="charges-form">
@@ -54,7 +54,7 @@
                                 <label>Description</label>
                                 <InputText 
                                     v-model="charge.description" 
-                                    placeholder="e.g., Minibar, Airport Transfer"
+                                    placeholder="e.g., Late Check-Out, Room Upgrade"
                                     :class="{ 'p-invalid': !charge.description && showValidation }"
                                 />
                             </div>
@@ -158,6 +158,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { BookingV2Service } from '@/service/BookingV2Service';
+import { bookingChargeCategories as chargeCategories } from '@/enum/bookingChargeCategories';
 import { useToast } from 'primevue/usetoast';
 
 const props = defineProps({
@@ -189,18 +190,6 @@ const charges = ref([
         quantity: 1
     }
 ]);
-
-const chargeCategories = [
-    { label: 'Food & Beverage', value: 'food_beverage' },
-    { label: 'Minibar', value: 'minibar' },
-    { label: 'Transport', value: 'transport' },
-    { label: 'Laundry', value: 'laundry' },
-    { label: 'Spa & Wellness', value: 'spa' },
-    { label: 'Telecommunications', value: 'telecom' },
-    { label: 'Business Services', value: 'business' },
-    { label: 'Damage/Repair', value: 'damage' },
-    { label: 'Other', value: 'other' }
-];
 
 const totalItems = computed(() => {
     return charges.value.reduce((sum, charge) => sum + (charge.quantity || 0), 0);

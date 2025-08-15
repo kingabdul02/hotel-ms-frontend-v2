@@ -167,92 +167,26 @@
 
             <!-- Recent Bookings (Moved from BookingDashboard) -->
             <div class="widget-section full-width">
-                <div class="card bookings-table-card">
-                    <div class="card-header flex justify-between align-items-center">
-                        <h5 class="m-0 flex align-items-center gap-2">
-                            <i class="pi pi-list text-primary"></i>
-                            <span>Recent Bookings</span>
-                        </h5>
-                        <div class="table-header flex align-items-center gap-2 flex-wrap">
-                            <InputText
-                                v-model="searchQuery"
-                                placeholder="Search (guest, room, booking id)"
-                                class="search-input w-full md:w-15rem"
-                            >
-                                <template #prepend>
-                                    <i class="pi pi-search" />
-                                </template>
-                            </InputText>
-                            <Dropdown v-model="filters.status" :options="statusOptions" optionLabel="label" optionValue="value" placeholder="Status" class="w-9rem" showClear />
-                            <Dropdown v-model="filters.payment" :options="paymentOptions" optionLabel="label" optionValue="value" placeholder="Payment" class="w-9rem" showClear />
-                            <Calendar v-model="filters.dateRange" selectionMode="range" :manualInput="false" placeholder="Date Range" class="w-13rem" :showIcon="true" />
-                            <Button label="Clear" icon="pi pi-filter-slash" size="small" outlined @click="resetFilters" />
-                        </div>
-                    </div>
-                    <div class="p-3">
-                        <DataTable
-                            :value="filteredBookings"
-                            :paginator="true"
-                            lazy
-                            :rows="bookingsPager.rows"
-                            :totalRecords="bookingsPager.total"
-                            :first="(bookingsPager.page - 1) * bookingsPager.rows"
-                            @page="onPage"
-                            responsiveLayout="scroll"
-                            class="custom-datatable"
-                            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-                            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} bookings"
-                        >
-                            <Column field="booking_id" header="Booking ID" sortable>
-                                <template #body="slotProps">
-                                    <i class="pi pi-home text-primary mr-2" />
-                                    <span>{{ slotProps.data.booking_id }}</span>
-                                </template>
-                            </Column>
-                            <Column field="room.name" header="Room" sortable>
-                                <template #body="slotProps">
-                                    <i class="pi pi-home text-primary mr-2" />
-                                    <span>{{ slotProps.data.room.name }}</span>
-                                </template>
-                            </Column>
-                            <Column field="user.name" header="Customer" sortable>
-                                <template #body="slotProps">
-                                    <i class="pi pi-user text-primary mr-2" />
-                                    <span>{{ slotProps.data.user.name }}</span>
-                                </template>
-                            </Column>
-                            <Column field="check_in_date" header="Check-In" sortable>
-                                <template #body="slotProps">
-                                    <i class="pi pi-calendar text-green-600 mr-2" />
-                                    <span>{{ formatDateTime(slotProps.data.check_in_date) }}</span>
-                                </template>
-                            </Column>
-                            <Column field="check_out_date" header="Check-Out" sortable>
-                                <template #body="slotProps">
-                                    <i class="pi pi-calendar text-red-600 mr-2" />
-                                    <span>{{ formatDateTime(slotProps.data.check_out_date) }}</span>
-                                </template>
-                            </Column>
-                            <Column field="payment_status" header="Payment Status" sortable>
-                                <template #body="slotProps">
-                                    <Tag
-                                        :value="slotProps.data.payment_status === 'paid' ? 'Paid' : 'Pending'"
-                                        :severity="slotProps.data.payment_status === 'paid' ? 'success' : 'warning'"
-                                    />
-                                </template>
-                            </Column>
-                            <Column header="Actions">
-                                <template #body="slotProps">
-                                    <div class="flex gap-2">
-                                        <Button label="View" icon="pi pi-eye" size="small" outlined @click="showDetails(slotProps.data)" />
-                                        <Button label="Modify" icon="pi pi-pencil" size="small" severity="info" outlined @click="showBookingModification(slotProps.data)" />
-                                        <Button label="Charges" icon="pi pi-dollar" size="small" severity="warning" outlined @click="showCustomCharges(slotProps.data)" />
-                                        <Button label="POS" icon="pi pi-shopping-cart" size="small" severity="success" outlined @click="showPOSCharges(slotProps.data)" />
-                                    </div>
-                                </template>
-                            </Column>
-                        </DataTable>
-                    </div>
+                <div class="card bookings-table-card p-3">
+                    <RecentBookingsTable
+                        :value="recentBookings"
+                        :pagingMeta="bookingsPager"
+                        :loading="refreshing"
+                        :rows="bookingsPager.rows"
+                        :rowsPerPageOptions="[10,20,50,100]"
+                        :showModify="true"
+                        :showCustomCharges="true"
+                        :showPOSCharges="true"
+                        @request-fetch="(p) => { bookingsPager.rows = p.rows; pullStatistics(p.page); }"
+                        @open-details="showDetails"
+                        @modify-booking="showBookingModification"
+                        @add-custom-charges="showCustomCharges"
+                        @add-pos-charges="showPOSCharges"
+                    >
+                        <template #header-actions>
+                            <Button class="p-button-success" icon="pi pi-download" label="Export" @click="exportDashboard" />
+                        </template>
+                    </RecentBookingsTable>
                 </div>
             </div>
         </div>
@@ -326,6 +260,7 @@ import BookingDetailsDialog from '@/components/BookingManagement/BookingDetailsD
 import BookingModificationDialog from '@/components/BookingManagement/BookingModificationDialog.vue';
 import CustomChargesDialog from '@/components/BookingManagement/CustomChargesDialog.vue';
 import POSChargesDialog from '@/components/pos/POSChargesDialog.vue';
+import RecentBookingsTable from '@/components/BookingManagement/RecentBookingsTable.vue';
 
 const router = useRouter();
 const toast = useToast();
@@ -587,9 +522,27 @@ const pullStatistics = async (page = 1) => {
 
 const onPage = (event) => { pullStatistics(event.page + 1); };
 const showDetails = (booking) => { selectedBooking.value = booking; showDialog.value = true; };
-const showBookingModification = (booking) => { selectedBooking.value = booking; isBookingModificationDialogVisible.value = true; };
-const showCustomCharges = (booking) => { selectedBooking.value = booking; isCustomChargesDialogVisible.value = true; };
-const showPOSCharges = (booking) => { selectedBooking.value = booking; isPOSChargesDialogVisible.value = true; };
+const showBookingModification = (booking) => {
+    if (booking?.is_checked_out) {
+        toast.add({ severity: 'warn', summary: 'Not allowed', detail: 'Booking is checked out. You cannot modify this booking.', life: 3000 });
+        return;
+    }
+    selectedBooking.value = booking; isBookingModificationDialogVisible.value = true; 
+};
+const showCustomCharges = (booking) => {
+    if (booking?.is_checked_out) {
+        toast.add({ severity: 'warn', summary: 'Not allowed', detail: 'Booking is checked out. You cannot add custom charges.', life: 3000 });
+        return;
+    }
+    selectedBooking.value = booking; isCustomChargesDialogVisible.value = true;
+};
+const showPOSCharges = (booking) => {
+    if (booking?.is_checked_out) {
+        toast.add({ severity: 'warn', summary: 'Not allowed', detail: 'Booking is checked out. You cannot add POS charges.', life: 3000 });
+        return;
+    }
+    selectedBooking.value = booking; isPOSChargesDialogVisible.value = true; 
+};
 const handleBookingUpdate = () => { isBookingModificationDialogVisible.value = false; isCustomChargesDialogVisible.value = false; isPOSChargesDialogVisible.value = false; statisticsBooking(); };
 
 const onRevPARLoaded = (data) => {
