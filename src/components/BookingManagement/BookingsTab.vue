@@ -246,9 +246,9 @@ const showPOSCharges = (booking: any) => {
         :showPOSCharges="true"
         @request-fetch="(p) => { rows = p.rows; statisticsBooking(p.page, p.filters, rows); }"
         @open-details="openDetails"
-  @modify-booking="showBookingModification"
-  @add-custom-charges="showCustomCharges"
-  @add-pos-charges="showPOSCharges"
+        @modify-booking="showBookingModification"
+        @add-custom-charges="showCustomCharges"
+        @add-pos-charges="showPOSCharges"
       >
         <template #header-actions>
           <Button label="New Reservation" icon="pi pi-plus" class="p-button-success" @click="openReservationDialog" />

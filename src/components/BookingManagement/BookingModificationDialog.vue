@@ -184,14 +184,15 @@ const roomTypeService = new RoomTypeService();
 const toast = useToast();
 
 const saving = ref(false);
+// Form state (camelCase fields the template binds to)
 const modifiedBooking = ref({});
+// Original snapshot for change detection
 const originalBooking = ref({});
+// Dropdown options
 const availableRoomTypes = ref([]);
 
-const canModifyGuest = computed(() => {
-    // Allow guest modification only for certain booking statuses
-    return ['confirmed', 'pending'].includes(originalBooking.value.status);
-});
+// Allow editing guest info when not checked out
+const canModifyGuest = computed(() => !originalBooking.value?.is_checked_out);
 
 const minCheckInDate = computed(() => {
     return new Date(); // Can't check in before today
@@ -308,23 +309,51 @@ onMounted(() => {
     }
 });
 
+// Normalize incoming booking object from various shapes (table uses snake_case)
 const initializeForm = () => {
-    originalBooking.value = { ...props.booking };
-    modifiedBooking.value = {
-        ...props.booking,
-        checkInDate: props.booking.checkInDate ? new Date(props.booking.checkInDate) : null,
-        checkOutDate: props.booking.checkOutDate ? new Date(props.booking.checkOutDate) : null
+    const b = props.booking || {};
+
+    const toDate = (v) => (v ? new Date(v) : null);
+
+    const normalized = {
+        // identifiers and flags (kept for canModifyGuest and submission)
+        id: b.id || b.booking_id,
+        booking_id: b.booking_id || b.id,
+        is_checked_in: b.is_checked_in || false,
+        is_checked_out: b.is_checked_out || false,
+
+        // guest fields
+        guestName: b.guestName || b.guest_name || b.user?.name || '',
+        guestEmail: b.guestEmail || b.guest_email || b.user?.email || '',
+        guestPhone: b.guestPhone || b.guest_phone || b.user?.phone || '',
+
+        // dates
+        checkInDate: toDate(b.checkInDate || b.check_in_date),
+        checkOutDate: toDate(b.checkOutDate || b.check_out_date),
+
+        // room type and guests
+        roomTypeId: b.roomTypeId || b.room_type_id || b.room?.room_type_id || b.room?.room_type?.id || null,
+        numberOfGuests: b.numberOfGuests ?? Number(b.no_of_guests ?? b.room?.no_of_guests ?? 1),
+
+        // pricing
+        roomRate: b.roomRate ?? b.room_rate ?? b.room?.price ?? 0,
+
+        // notes
+        specialRequests: b.specialRequests || b.special_requests || ''
     };
+
+    originalBooking.value = { ...normalized };
+    modifiedBooking.value = { ...normalized };
 };
 
 const loadRoomTypes = async () => {
     try {
-        const response = await roomTypeService.getRoomTypes();
-        if (response.success) {
-            availableRoomTypes.value = response.data;
-        }
+        // RoomTypeService.getRoomTypes returns an array (response.data.data)
+        const list = await roomTypeService.getRoomTypes();
+        availableRoomTypes.value = Array.isArray(list) ? list : (list?.data || []);
     } catch (error) {
         console.error('Error loading room types:', error);
+        availableRoomTypes.value = [];
     }
 };
 
@@ -347,38 +376,35 @@ const saveChanges = async () => {
         close();
         return;
     }
-    
+
     saving.value = true;
     try {
-        const bookingData = {
-            ...modifiedBooking.value,
-            checkInDate: modifiedBooking.value.checkInDate?.toISOString().split('T')[0],
-            checkOutDate: modifiedBooking.value.checkOutDate?.toISOString().split('T')[0]
+        // Build payload in snake_case expected by API
+        const payload = {
+            guest_name: modifiedBooking.value.guestName || undefined,
+            guest_email: modifiedBooking.value.guestEmail || undefined,
+            guest_phone: modifiedBooking.value.guestPhone || undefined,
+            check_in_date: modifiedBooking.value.checkInDate ? new Date(modifiedBooking.value.checkInDate).toISOString().split('T')[0] : undefined,
+            check_out_date: modifiedBooking.value.checkOutDate ? new Date(modifiedBooking.value.checkOutDate).toISOString().split('T')[0] : undefined,
+            room_type_id: modifiedBooking.value.roomTypeId ?? undefined,
+            no_of_guests: (modifiedBooking.value.numberOfGuests != null) ? String(modifiedBooking.value.numberOfGuests) : undefined,
+            room_rate: modifiedBooking.value.roomRate ?? undefined,
+            special_requests: modifiedBooking.value.specialRequests || undefined
         };
-        
-        const response = await bookingService.updateBooking(props.booking.id, bookingData);
-        
-        if (response.success) {
-            toast.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: 'Booking updated successfully',
-                life: 3000
-            });
-            
-            emit('booking-updated', response.data);
+
+        const bookingId = originalBooking.value.id || originalBooking.value.booking_id;
+        const response = await bookingService.updateBooking(bookingId, payload);
+
+        if (response?.success) {
+            toast.add({ severity: 'success', summary: 'Success', detail: 'Booking updated successfully', life: 3000 });
+            emit('booking-updated', response.data || null);
             close();
         } else {
-            throw new Error(response.message || 'Failed to update booking');
+            throw new Error(response?.message || 'Failed to update booking');
         }
     } catch (error) {
         console.error('Error updating booking:', error);
-        toast.add({
-            severity: 'error',
-            summary: 'Error',
-            detail: error.message || 'Failed to update booking',
-            life: 5000
-        });
+        toast.add({ severity: 'error', summary: 'Error', detail: error?.message || 'Failed to update booking', life: 5000 });
     } finally {
         saving.value = false;
     }
