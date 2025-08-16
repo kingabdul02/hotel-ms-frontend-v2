@@ -54,6 +54,28 @@ interface Bill {
   halls?: HallBooking[]
   total_accommodation: number
   total_halls_cost?: number
+  // New charges sections
+  pos_charges?: Array<{
+    id: number
+    outlet: string
+    item: string
+    unit_price: number
+    quantity: number
+    total: number
+    notes?: string | null
+    posted_at?: string
+  }>
+  pos_charges_total?: number
+  custom_charges?: Array<{
+    id: number
+    description: string
+    category?: string
+    unit_price: number
+    quantity: number
+    total: number
+    tax_rate?: number | null
+  }>
+  custom_charges_total?: number
   grand_total: number
   payment_status: 'paid' | 'pending' | 'overdue' | 'cancelled'
   invoice_number?: string
@@ -115,6 +137,8 @@ const totalGuests = computed(() => bill.value?.guests.length || 0)
 const totalHalls = computed(() => bill.value?.halls?.length || 0)
 
 const hasHalls = computed(() => totalHalls.value > 0)
+const hasPOSCharges = computed(() => (bill.value?.pos_charges?.length || 0) > 0)
+const hasCustomCharges = computed(() => (bill.value?.custom_charges?.length || 0) > 0)
 
 const isPaid = computed(() => bill.value?.payment_status === 'paid')
 
@@ -634,6 +658,68 @@ const printBill = async () => {
                     <td>${calculateDuration(hall.start_date, hall.end_date)}</td>
                     <td class="amount">${formatCurrency(parseFloat(hall.hall_price))}</td>
                     <td class="amount">${formatCurrency(parseFloat(hall.amount))}</td>
+                  </tr>`
+                ).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- POS Charges (if any) -->
+          ${bill.value?.pos_charges && bill.value.pos_charges.length > 0 ? `
+          <div class="pos-charges-details">
+            <div class="section-header">POS Charges</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Outlet</th>
+                  <th>Item</th>
+                  <th>Unit Price</th>
+                  <th>Qty</th>
+                  <th style="text-align: right;">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bill.value.pos_charges.map(ch => 
+                  `<tr>
+                    <td>${ch.posted_at ? new Date(ch.posted_at).toLocaleString('en-US') : '-'}</td>
+                    <td>${ch.outlet}</td>
+                    <td>${ch.item}</td>
+                    <td class="amount">${formatCurrency(ch.unit_price)}</td>
+                    <td>${ch.quantity}</td>
+                    <td class="amount">${formatCurrency(ch.total)}</td>
+                  </tr>`
+                ).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Custom Charges (if any) -->
+          ${bill.value?.custom_charges && bill.value.custom_charges.length > 0 ? `
+          <div class="custom-charges-details">
+            <div class="section-header">Custom Charges</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Category</th>
+                  <th>Unit Price</th>
+                  <th>Qty</th>
+                  <th>Tax %</th>
+                  <th style="text-align: right;">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bill.value.custom_charges.map(ch => 
+                  `<tr>
+                    <td>${ch.description}</td>
+                    <td>${ch.category ?? '-'}</td>
+                    <td class="amount">${formatCurrency(ch.unit_price)}</td>
+                    <td>${ch.quantity}</td>
+                    <td>${ch.tax_rate ?? '-'}</td>
+                    <td class="amount">${formatCurrency(ch.total)}</td>
                   </tr>`
                 ).join('')}
               </tbody>
@@ -1288,6 +1374,97 @@ onMounted(async () => {
           </template>
         </Card>
 
+        <!-- POS Charges Details -->
+        <Card v-if="hasPOSCharges" class="pos-charges-card">
+          <template #title>
+            <div class="card-header">
+              <i class="pi pi-shopping-cart"></i>
+              <span>POS Charges</span>
+              <Chip 
+                :label="`${bill.pos_charges?.length || 0} Item(s)`" 
+                icon="pi pi-list"
+                class="pos-count-chip"
+              />
+            </div>
+          </template>
+          <template #content>
+            <DataTable 
+              :value="bill.pos_charges" 
+              responsiveLayout="scroll" 
+              class="professional-table pos-table"
+              stripedRows
+              :paginator="(bill.pos_charges?.length || 0) > 10"
+              :rows="10"
+              :showGridlines="true"
+            >
+              <Column field="posted_at" header="Date" sortable>
+                <template #body="slotProps">
+                  {{ slotProps.data.posted_at ? new Date(slotProps.data.posted_at).toLocaleString('en-US') : '-' }}
+                </template>
+              </Column>
+              <Column field="outlet" header="Outlet" sortable />
+              <Column field="item" header="Item" sortable />
+              <Column field="unit_price" header="Unit Price" sortable>
+                <template #body="slotProps">
+                  {{ formatCurrency(slotProps.data.unit_price) }}
+                </template>
+              </Column>
+              <Column field="quantity" header="Qty" sortable />
+              <Column field="total" header="Line Total" sortable>
+                <template #body="slotProps">
+                  <span class="amount-text">{{ formatCurrency(slotProps.data.total) }}</span>
+                </template>
+              </Column>
+              <Column field="notes" header="Notes" />
+            </DataTable>
+          </template>
+        </Card>
+
+        <!-- Custom Charges Details -->
+        <Card v-if="hasCustomCharges" class="custom-charges-card">
+          <template #title>
+            <div class="card-header">
+              <i class="pi pi-plus-circle"></i>
+              <span>Custom Charges</span>
+              <Chip 
+                :label="`${bill.custom_charges?.length || 0} Charge(s)`" 
+                icon="pi pi-list"
+                class="custom-count-chip"
+              />
+            </div>
+          </template>
+          <template #content>
+            <DataTable 
+              :value="bill.custom_charges" 
+              responsiveLayout="scroll" 
+              class="professional-table custom-table"
+              stripedRows
+              :paginator="(bill.custom_charges?.length || 0) > 10"
+              :rows="10"
+              :showGridlines="true"
+            >
+              <Column field="description" header="Description" sortable />
+              <Column field="category" header="Category" sortable />
+              <Column field="unit_price" header="Unit Price" sortable>
+                <template #body="slotProps">
+                  {{ formatCurrency(slotProps.data.unit_price) }}
+                </template>
+              </Column>
+              <Column field="quantity" header="Qty" sortable />
+              <Column field="total" header="Line Total" sortable>
+                <template #body="slotProps">
+                  <span class="amount-text">{{ formatCurrency(slotProps.data.total) }}</span>
+                </template>
+              </Column>
+              <Column field="tax_rate" header="Tax %">
+                <template #body="slotProps">
+                  {{ slotProps.data.tax_rate ?? '-' }}
+                </template>
+              </Column>
+            </DataTable>
+          </template>
+        </Card>
+
         <!-- Cost Summary -->
         <Card class="summary-card">
           <template #title>
@@ -1313,6 +1490,14 @@ onMounted(async () => {
                     <small class="meal-details">{{ formatCurrency(bill.meal_plan.rate_per_day) }}/day</small>
                   </span>
                   <span class="summary-value">{{ formatCurrency(bill.meal_plan.total_meal_cost) }}</span>
+                </div>
+                <div v-if="hasPOSCharges" class="summary-item">
+                  <span class="summary-label">POS Charges Total:</span>
+                  <span class="summary-value">{{ formatCurrency(bill.pos_charges_total || 0) }}</span>
+                </div>
+                <div v-if="hasCustomCharges" class="summary-item">
+                  <span class="summary-label">Custom Charges Total:</span>
+                  <span class="summary-value">{{ formatCurrency(bill.custom_charges_total || 0) }}</span>
                 </div>
                 <div class="summary-item tax-item">
                   <span class="summary-label">VAT (7.5%):</span>
