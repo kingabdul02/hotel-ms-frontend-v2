@@ -163,6 +163,30 @@ const model = ref([
                 ] // Check for '/booking' in the path
             },
             {
+                label: 'POS', icon: 'pi pi-shopping-cart',
+                visible: route.path.includes('/settings'),
+                items: [
+                    {
+                        label: 'Outlets',
+                        icon: 'pi pi-store',
+                        to: '/settings/manage/pos/outlets',
+                        visible: route.path.includes('/settings'),
+                    },
+                    {
+                        label: 'Categories',
+                        icon: 'pi pi-tags',
+                        to: '/settings/manage/pos/outlet-categories',
+                        visible: route.path.includes('/settings'),
+                    },
+                    {
+                        label: 'Items',
+                        icon: 'pi pi-list',
+                        to: '/settings/manage/pos/outlet-items',
+                        visible: route.path.includes('/settings'),
+                    },
+                ]
+            },
+            {
                 label: 'Manage Users',
                 icon: 'pi pi-users',
                 to: '/settings/manage/users',

@@ -100,6 +100,24 @@ const routes = [
                         component: () => import('@/views/pages/settings/ManageHalls.vue'),
                         meta: { auth: true }
                     },
+                    {
+                        path: '/settings/manage/pos/outlets',
+                        name: 'manageposoutlets',
+                        component: () => import('@/views/pages/settings/ManagePOSOutlets.vue'),
+                        meta: { auth: true }
+                    },
+                    {
+                        path: '/settings/manage/pos/outlet-categories',
+                        name: 'manageposoutletcategories',
+                        component: () => import('@/views/pages/settings/ManagePOSOutletCategories.vue'),
+                        meta: { auth: true }
+                    },
+                    {
+                        path: '/settings/manage/pos/outlet-items',
+                        name: 'manageposoutletitems',
+                        component: () => import('@/views/pages/settings/ManagePOSOutletItems.vue'),
+                        meta: { auth: true }
+                    },
                 ]
             },
             {

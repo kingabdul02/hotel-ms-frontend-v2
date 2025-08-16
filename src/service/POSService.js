@@ -48,7 +48,7 @@ export class POSService {
     async getPOSOutlets(params = {}) {
         try {
             const response = await axiosInstance.get(
-                `${this.baseURL}/v2/pos/outlets`,
+                `${this.baseURL}/v2/pos-outlets`,
                 { params }
             );
             return response.data;
