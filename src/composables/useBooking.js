@@ -25,7 +25,7 @@ export function useBooking() {
   const isCreatingReservation = ref(false);
 
   /* ──────────────────────────────────────────── */
-  const statisticsBooking = async (page = 1, filters = {}) => {
+  const statisticsBooking = async (page = 1, filters = {}, rowsPerPage = 10) => {
     const token = getToken();
     if (!token) return null;
   
@@ -35,11 +35,17 @@ export function useBooking() {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           page,
+          per_page: rowsPerPage,
           search: filters.search || '',
           room_type_id: filters.room_type_id || '',
           payment_status: filters.payment_status || '',
+          booking_status: filters.booking_status || '',
           check_in_from: filters.check_in_from || '',
           check_in_to: filters.check_in_to || '',
+          check_out_from: filters.check_out_from || '',
+          check_out_to: filters.check_out_to || '',
+          booking_date_from: filters.booking_date_from || '',
+          booking_date_to: filters.booking_date_to || '',
         }
       });
   
@@ -120,7 +126,7 @@ export function useBooking() {
       await statisticsBooking(pagingMeta.value.current_page);
       return true;
     } catch (err) {
-      errorToast('Reservation creation failed', err);
+      errorToast('Reservation creation failed', err.response.data.message || err);
       return false;
     } finally {
       isCreatingReservation.value = false;

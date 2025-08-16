@@ -10,6 +10,9 @@ import Textarea from 'primevue/textarea';
 import Dialog from 'primevue/dialog';
 import Divider from 'primevue/divider';
 import Rating from 'primevue/rating';
+import InputNumber from 'primevue/inputnumber';
+import InputText from 'primevue/inputtext';
+import RadioButton from 'primevue/radiobutton';
 import { useBooking } from '@/composables/useBooking';
 import { formatDateTime } from '@/utils/dateTimeFormatter';
 import { formatCurrency } from '@/utils/currencyFormatter';
@@ -31,7 +34,11 @@ const reservationForm = ref({
   no_of_guests: 1,
   room_id: null,
   special_requests: '',
-  guest_name: ''
+  guest_name: '',
+  // discounting
+  discount_type: 'amount', // 'amount' | 'percent'
+  discount_value: 0,
+  discount_reason: ''
 });
 
 const guestOptions = ref([
@@ -58,7 +65,10 @@ const resetReservationForm = () => {
     no_of_guests: 1,
     room_id: null,
     special_requests: '',
-    guest_name: ''
+  guest_name: '',
+  discount_type: 'amount',
+  discount_value: 0,
+  discount_reason: ''
   };
   availableRooms.value = [];
 };
@@ -100,6 +110,33 @@ const selectRoom = (room: any) => {
   nextStep();
 };
 
+// Pricing & discount computations
+const selectedRoom = computed(() => getRoomById(reservationForm.value.room_id as any));
+const numberOfNights = computed(() => {
+  const ci = reservationForm.value.check_in_date as any;
+  const co = reservationForm.value.check_out_date as any;
+  if (!ci || !co) return 0;
+  const start = new Date(ci).setHours(0,0,0,0);
+  const end = new Date(co).setHours(0,0,0,0);
+  const diff = (end as number) - (start as number);
+  return Math.max(Math.ceil(diff / (1000 * 60 * 60 * 24)), 0);
+});
+const nightlyRate = computed(() => selectedRoom.value?.price || 0);
+const subtotal = computed(() => nightlyRate.value * numberOfNights.value);
+const clampedDiscountValue = computed(() => {
+  const v = Number(reservationForm.value.discount_value) || 0;
+  if (reservationForm.value.discount_type === 'percent') return Math.min(Math.max(v, 0), 100);
+  // amount
+  return Math.min(Math.max(v, 0), subtotal.value);
+});
+const discountAmount = computed(() => {
+  if (reservationForm.value.discount_type === 'percent') {
+    return Math.round((subtotal.value * clampedDiscountValue.value) / 100);
+  }
+  return clampedDiscountValue.value;
+});
+const totalAfterDiscount = computed(() => Math.max(subtotal.value - discountAmount.value, 0));
+
 const createNewReservation = async () => {
   const payload = {
     room_id: reservationForm.value.room_id,
@@ -108,7 +145,15 @@ const createNewReservation = async () => {
     no_of_guests: reservationForm.value.no_of_guests.toString(),
     special_requests: reservationForm.value.special_requests || 'None',
     guest_name: reservationForm.value.guest_name,
-    is_online_booking: false
+    is_online_booking: false,
+    // Include discount fields only when applied
+    ...(clampedDiscountValue.value > 0
+      ? {
+          discount_type: reservationForm.value.discount_type,
+          discount_value: clampedDiscountValue.value,
+          discount_reason: reservationForm.value.discount_reason || undefined
+        }
+      : {})
   };
 
   const success = await createReservation(payload);
@@ -304,6 +349,18 @@ const isStepValid = computed(() => {
             <label>Guests:</label>
             <span>{{ reservationForm.no_of_guests }}</span>
           </div>
+          <div class="summary-item">
+            <label>Nights:</label>
+            <span>{{ numberOfNights }}</span>
+          </div>
+          <div class="summary-item">
+            <label>Rate (per night):</label>
+            <span>{{ formatCurrency(nightlyRate) }}</span>
+          </div>
+          <div class="summary-item">
+            <label>Subtotal:</label>
+            <span>{{ formatCurrency(subtotal) }}</span>
+          </div>
         </div>
         <Divider />
         <div class="field">
@@ -314,6 +371,50 @@ const isStepValid = computed(() => {
         <div class="field">
           <label class="block text-sm font-medium mb-2">Guest Name</label>
           <InputText v-model="reservationForm.guest_name" placeholder="Enter guest name" class="w-full" />
+        </div>
+
+        <Divider />
+        <h5 class="mb-3">Discount</h5>
+        <div class="grid gap-3">
+          <div class="col-12 md:col-4">
+            <label class="block text-sm font-medium mb-2">Type</label>
+            <div class="flex align-items-center gap-3">
+              <div class="flex align-items-center gap-2">
+                <RadioButton inputId="discTypeAmount" name="discountType" value="amount" v-model="reservationForm.discount_type" />
+                <label for="discTypeAmount">Amount (₦)</label>
+              </div>
+              <div class="flex align-items-center gap-2">
+                <RadioButton inputId="discTypePercent" name="discountType" value="percent" v-model="reservationForm.discount_type" />
+                <label for="discTypePercent">Percent (%)</label>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 md:col-4">
+            <label class="block text-sm font-medium mb-2">Value</label>
+            <InputNumber class="w-full"
+              v-model="reservationForm.discount_value"
+              :min="0"
+              :max="reservationForm.discount_type === 'percent' ? 100 : subtotal"
+              :suffix="reservationForm.discount_type === 'percent' ? ' %' : ''"
+              :mode="reservationForm.discount_type === 'percent' ? 'decimal' : 'currency'"
+              currency="NGN" locale="en-NG"
+            />
+          </div>
+          <div class="col-12 md:col-4">
+            <label class="block text-sm font-medium mb-2">Reason (optional)</label>
+            <InputText v-model="reservationForm.discount_reason" class="w-full" placeholder="Promo, loyalty, manager override, etc." />
+          </div>
+        </div>
+
+        <div class="discount-summary mt-3">
+          <div class="summary-item">
+            <label>Discount:</label>
+            <span>-{{ formatCurrency(discountAmount) }}</span>
+          </div>
+          <div class="summary-item total">
+            <label>Total:</label>
+            <span>{{ formatCurrency(totalAfterDiscount) }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -429,6 +530,17 @@ const isStepValid = computed(() => {
 .summary-item label {
   color: var(--text-color-secondary);
   font-weight: 500;
+}
+.discount-summary .summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+.discount-summary .summary-item.total span {
+  color: var(--primary-color);
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 .card-header-section {
   padding: 1rem;

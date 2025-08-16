@@ -14,6 +14,10 @@ export function useCorporateBooking() {
   const totalRecords = ref(0);
   const searchQuery = ref('');
   const selectedStatus = ref('');
+  const selectedPaymentStatus = ref('');
+  const filterDateRange = ref([]);
+  const filterCheckoutRange = ref([]);
+  const filterBookingDateRange = ref([]);
   const expandedBookings = ref([]);
   const showBookingDialog = ref(false);
   const isEditMode = ref(false);
@@ -34,7 +38,13 @@ export function useCorporateBooking() {
   const companies = ref([]);
   const filteredCompanies = ref([]);
 
-  const fetchCorporateBookings = async (params = { first: 0, rows: 10, page: 1 }) => {
+  const lastFetchParams = ref({ first: 0, rows: 10, page: 1 });
+  const lastFetchFilters = ref({});
+
+  const fetchCorporateBookings = async (params = { first: 0, rows: 10, page: 1 }, filters = {}) => {
+    lastFetchParams.value = params;
+    lastFetchFilters.value = filters;
+
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
     loading.value = true;
@@ -45,8 +55,15 @@ export function useCorporateBooking() {
         params: {
           page: params.page,
           per_page: params.rows,
-          search: searchQuery.value,
-          status: selectedStatus.value
+          search: searchQuery.value || '',
+          status: selectedStatus.value || '',
+          payment_status: selectedPaymentStatus.value || '',
+          check_in_from: filters.check_in_from || '',
+          check_in_to: filters.check_in_to || '',
+          check_out_from: filters.check_out_from || '',
+          check_out_to: filters.check_out_to || '',
+          booking_from: filters.booking_from || '',
+          booking_to: filters.booking_to || '',
         }
       });
       corporateBookings.value = response.data.data;
@@ -118,7 +135,7 @@ export function useCorporateBooking() {
     }
   };
 
-  const updateCorporateBooking = async (bookingId, formData) => {
+      const updateCorporateBooking = async (bookingId, formData) => {
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
     store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
@@ -144,27 +161,36 @@ export function useCorporateBooking() {
     }
   };
 
-  const fetchAvailableRooms = async () => {
-    if (!corporateBookingForm.check_in_date || !corporateBookingForm.check_out_date) return;
+  const fetchAvailableRooms = async (check_in_date, check_out_date, bookingId = null) => {
+    if (!check_in_date || !check_out_date) return;
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
+    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
-      const response = await axiosInstance.get('/rooms', {
-        params: {
-          check_in_date: corporateBookingForm.check_in_date,
-          check_out_date: corporateBookingForm.check_out_date
-        },
+      const params = {
+        check_in_date,
+        check_out_date
+      };
+      if (bookingId) {
+        params.booking_id = bookingId;
+      }
+      const response = await axiosInstance.get('/room/search', {
         headers: { Authorization: `Bearer ${token}` },
+        params
       });
-      availableRooms.value = response.data?.data || [];
+      availableRooms.value = response.data.data;
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch available rooms', life: 3000 });
+      console.error('Error fetching available rooms:', error);
+    } finally {
+      store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
     }
   };
 
   const fetchAvailableHalls = async () => {
     const userData = JSON.parse(localStorage.getItem('userData'));
     const token = userData?.token;
+    store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
     try {
       const response = await axiosInstance.get('/halls', {
         headers: { Authorization: `Bearer ${token}` },
@@ -172,6 +198,8 @@ export function useCorporateBooking() {
       availableHalls.value = response.data?.data || [];
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch available halls', life: 3000 });
+    } finally {
+      store.commit(LOADING_SPINNER_SHOW_MUTATION, false);
     }
   };
 
@@ -335,11 +363,11 @@ export function useCorporateBooking() {
     const token = userData?.token;
     try {
       store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-      await axiosInstance.put(`/admin/corporate-booking/guest/${guest.id}/check-in`, {}, {
+      const response = await axiosInstance.post(`/admin/corporate-booking/guest/${guest.id}/check-in`, {}, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.add({ severity: 'success', summary: 'Success', detail: `${guest.full_name} has been checked in successfully`, life: 3000 });
-      await fetchCorporateBookings();
+      await fetchCorporateBookings(lastFetchParams.value, lastFetchFilters.value);
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: error.response?.data?.message || 'Failed to check in guest', life: 3000 });
       console.error('Error checking in guest:', error);
@@ -353,11 +381,11 @@ export function useCorporateBooking() {
     const token = userData?.token;
     try {
       store.commit(LOADING_SPINNER_SHOW_MUTATION, true);
-      await axiosInstance.put(`/admin/corporate-booking/guest/${guest.id}/check-out`, {}, {
+      const response = await axiosInstance.post(`/admin/corporate-booking/guest/${guest.id}/check-out`, {}, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.add({ severity: 'success', summary: 'Success', detail: `${guest.full_name} has been checked out successfully`, life: 3000 });
-      await fetchCorporateBookings();
+      await fetchCorporateBookings(lastFetchParams.value, lastFetchFilters.value);
     } catch (error) {
       toast.add({ severity: 'error', summary: 'Error', detail: error.response?.data?.message || 'Failed to check out guest', life: 3000 });
       console.error('Error checking out guest:', error);
@@ -385,6 +413,59 @@ export function useCorporateBooking() {
       rejectClass: 'p-button-text p-button-text',
       acceptClass: 'p-button-danger',
       accept: () => checkOutGuest(guest),
+    });
+  };
+
+  // Booking-level check-in/check-out methods
+  const checkInBooking = async (booking) => {
+    const userData = JSON.parse(localStorage.getItem('userData'));
+    const token = userData?.token;
+    try {
+      const response = await axiosInstance.post(`/admin/corporate-booking/${booking.id}/check-in`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Corporate booking checked in successfully', life: 3000 });
+      await fetchCorporateBookings(lastFetchParams.value, lastFetchFilters.value);
+    } catch (error) {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to check in corporate booking', life: 3000 });
+      console.error('Error checking in corporate booking:', error);
+      throw error;
+    }
+  };
+
+  const checkOutBooking = async (booking) => {
+    const userData = JSON.parse(localStorage.getItem('userData'));
+    const token = userData?.token;
+    try {
+      const response = await axiosInstance.post(`/admin/corporate-booking/${booking.id}/check-out`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Corporate booking checked out successfully', life: 3000 });
+      await fetchCorporateBookings(lastFetchParams.value, lastFetchFilters.value);
+    } catch (error) {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to check out corporate booking', life: 3000 });
+      console.error('Error checking out corporate booking:', error);
+      throw error;
+    }
+  };
+
+  const confirmBookingCheckIn = (booking) => {
+    confirm.require({
+      message: `Are you sure you want to check in all guests for corporate booking ${booking.reservation_code}?`,
+      header: 'Booking Check-In Confirmation',
+      icon: 'pi pi-sign-in',
+      acceptClass: 'p-button-success',
+      accept: () => checkInBooking(booking),
+    });
+  };
+
+  const confirmBookingCheckOut = (booking) => {
+    confirm.require({
+      message: `Are you sure you want to check out all guests for corporate booking ${booking.reservation_code}?`,
+      header: 'Booking Check-Out Confirmation',
+      icon: 'pi pi-sign-out',
+      acceptClass: 'p-button-danger',
+      accept: () => checkOutBooking(booking),
     });
   };
 
@@ -420,6 +501,10 @@ export function useCorporateBooking() {
     totalRecords,
     searchQuery,
     selectedStatus,
+    selectedPaymentStatus,
+    filterDateRange,
+    filterCheckoutRange,
+    filterBookingDateRange,
     expandedBookings,
     corporateBookingForm,
     selectedCompany,
@@ -451,6 +536,8 @@ export function useCorporateBooking() {
     getTotalGuestsCount,
     confirmCheckIn,
     confirmCheckOut,
+    confirmBookingCheckIn,
+    confirmBookingCheckOut,
     fetchCorporateBill,
     toast,
     confirm,

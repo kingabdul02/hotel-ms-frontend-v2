@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 import AppMenuItem from './AppMenuItem.vue';
 import { useRoute, useRouter } from 'vue-router'; // Import useRoute for accessing the current route
@@ -80,19 +80,28 @@ const model = ref([
                 to: '/admin/booking/management',
                 visible: route.path.includes('/booking'), // Check for '/booking' in the path
             },
+            // {
+            //     label: 'Listings',
+            //     icon: 'pi pi-fw pi-sort-amount-up',
+            //     to: '/admin/booking/manage/listings',
+            //     visible: route.path.includes('/booking'), // Check for '/booking' in the path
+            // },
+            // {
+            //     label: 'Notifications',
+            //     icon: 'pi pi-fw pi-bell',
+            //     to: '/admin/bookings/notifications',
+            //     visible: route.path.includes('/booking'), // Check for '/booking' in the path
+            // },
+            // Housekeeping Menus
             {
-                label: 'Listings',
-                icon: 'pi pi-fw pi-sort-amount-up',
-                to: '/admin/booking/manage/listings',
-                visible: route.path.includes('/booking'), // Check for '/booking' in the path
+                label: 'Dashboard',
+                icon: 'pi pi-fw pi-home',
+                to: '/admin/housekeeping/dashboard',
+                visible: route.path.includes('/housekeeping'), // Check for '/housekeeping' in the path
             },
-            {
-                label: 'Notifications',
-                icon: 'pi pi-fw pi-bell',
-                to: '/admin/bookings/notifications',
-                visible: route.path.includes('/booking'), // Check for '/booking' in the path
-            },
-            //Settings Menus
+            // You can add more housekeeping items here when routes exist
+            // { label: 'Assignments', icon: 'pi pi-fw pi-users', to: '/admin/housekeeping/assignments', visible: route.path.includes('/housekeeping') },
+            // Settings Menus
             {
                 label: 'Dashboard',
                 icon: 'pi pi-fw pi-home',
@@ -152,6 +161,30 @@ const model = ref([
                         visible: route.path.includes('/settings'), // Check for '/booking' in the path
                     },
                 ] // Check for '/booking' in the path
+            },
+            {
+                label: 'POS', icon: 'pi pi-shopping-cart',
+                visible: route.path.includes('/settings'),
+                items: [
+                    {
+                        label: 'Outlets',
+                        icon: 'pi pi-store',
+                        to: '/settings/manage/pos/outlets',
+                        visible: route.path.includes('/settings'),
+                    },
+                    {
+                        label: 'Categories',
+                        icon: 'pi pi-tags',
+                        to: '/settings/manage/pos/outlet-categories',
+                        visible: route.path.includes('/settings'),
+                    },
+                    {
+                        label: 'Items',
+                        icon: 'pi pi-list',
+                        to: '/settings/manage/pos/outlet-items',
+                        visible: route.path.includes('/settings'),
+                    },
+                ]
             },
             {
                 label: 'Manage Users',
@@ -362,6 +395,36 @@ const model3 = ref([
         ]
     },
 ]);
+
+// React to route changes so visibility updates per module
+const sectionFor = (to) => {
+    if (!to) return null;
+    if (to.startsWith('/inventory')) return 'inventory';
+    if (to.startsWith('/admin/booking') || to.startsWith('/admin/bookings')) return 'booking';
+    if (to.startsWith('/admin/housekeeping')) return 'housekeeping';
+    if (to.startsWith('/settings')) return 'settings';
+    return null;
+};
+
+watch(
+    () => route.path,
+    (path) => {
+        const show = (seg) => {
+            // Default: show when current path contains the section segment
+            if (path.includes(`/${seg}`)) return true;
+            // Map Corporate Bill pages to the Booking section so booking menus show up
+            if (seg === 'booking' && (path.startsWith('/corporate-bill') || path.startsWith('/corporate'))) return true;
+            return false;
+        };
+        model.value.forEach(group => {
+            group.items?.forEach(item => {
+                const seg = sectionFor(item.to);
+                if (seg) item.visible = show(seg);
+            });
+        });
+    },
+    { immediate: true }
+);
 </script>
 
 <template>

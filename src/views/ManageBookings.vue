@@ -247,11 +247,22 @@ onMounted(async () => {
 
 // Watchers
 watch(searchQuery, handleSearch, { debounce: 500 });
+// Format date for API (convert Date object to YYYY-MM-DD string)
+const formatDateForAPI = (date: Date | string | null) => {
+  if (!date) return null;
+  if (typeof date === 'string') return date;
+  return date.toISOString().split('T')[0];
+};
+
 watch(
   () => [corporateBookingForm.check_in_date, corporateBookingForm.check_out_date],
   () => {
     if (corporateBookingForm.check_in_date && corporateBookingForm.check_out_date) {
-      fetchAvailableRooms();
+      const formattedCheckIn = formatDateForAPI(corporateBookingForm.check_in_date);
+      const formattedCheckOut = formatDateForAPI(corporateBookingForm.check_out_date);
+      if (formattedCheckIn && formattedCheckOut) {
+        fetchAvailableRooms(formattedCheckIn, formattedCheckOut);
+      }
     }
   }
 );

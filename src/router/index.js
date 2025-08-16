@@ -28,7 +28,13 @@ const routes = [
             {
                 path: '/admin/booking/dashboard',
                 name: 'bookingdashboard',
-                component: () => import('@/views/BookingDashboard.vue'),
+                component: () => import('@/views/EnhancedDashboard.vue'),
+                meta: { auth: true }
+            },
+            {
+                path: '/admin/housekeeping/dashboard',
+                name: 'housekeepingdashboard',
+                component: () => import('@/views/HousekeepingDashboard.vue'),
                 meta: { auth: true }
             },
             {
@@ -94,6 +100,24 @@ const routes = [
                         component: () => import('@/views/pages/settings/ManageHalls.vue'),
                         meta: { auth: true }
                     },
+                    {
+                        path: '/settings/manage/pos/outlets',
+                        name: 'manageposoutlets',
+                        component: () => import('@/views/pages/settings/ManagePOSOutlets.vue'),
+                        meta: { auth: true }
+                    },
+                    {
+                        path: '/settings/manage/pos/outlet-categories',
+                        name: 'manageposoutletcategories',
+                        component: () => import('@/views/pages/settings/ManagePOSOutletCategories.vue'),
+                        meta: { auth: true }
+                    },
+                    {
+                        path: '/settings/manage/pos/outlet-items',
+                        name: 'manageposoutletitems',
+                        component: () => import('@/views/pages/settings/ManagePOSOutletItems.vue'),
+                        meta: { auth: true }
+                    },
                 ]
             },
             {
@@ -102,12 +126,6 @@ const routes = [
                 component: () => import('@/components/BookingManagement/BookingManagement.vue'),
                 meta: { auth: true }
             },
-            {
-                path: '/corporate-bill/:reservation_code',
-                name: 'CorporateBill',
-                component: () => import('@/components/BookingManagement/CorporateBill.vue'),
-                meta: { auth: true }
-              },
             {
                 path: '/admin/booking/manage/listings',
                 name: 'managelistings',
@@ -257,6 +275,25 @@ const routes = [
                 path: '/documentation',
                 name: 'documentation',
                 component: () => import('@/views/utilities/Documentation.vue')
+            },
+            {
+                path: '/revenue/dashboard',
+                name: 'revenuedashboard',
+                component: () => import('@/views/RevenueDashboard.vue'),
+                meta: { auth: true }
+            }
+        ]
+    },
+    // Ensure CorporateBill uses AppLayout (sidebar/topbar) at the desired URL
+    {
+        path: '/corporate-bill/:reservation_code',
+        component: AppLayout,
+        children: [
+            {
+                path: '',
+                name: 'CorporateBill',
+                component: () => import('@/components/BookingManagement/CorporateBill.vue'),
+                meta: { auth: true }
             }
         ]
     },

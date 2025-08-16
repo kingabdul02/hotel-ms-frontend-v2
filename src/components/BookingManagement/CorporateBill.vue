@@ -15,7 +15,11 @@ import Chip from 'primevue/chip'
 import Message from 'primevue/message'
 import Panel from 'primevue/panel'
 import ConfirmDialog from 'primevue/confirmdialog'
+import Dialog from 'primevue/dialog'
+import Dropdown from 'primevue/dropdown'
 import { useConfirm } from 'primevue/useconfirm'
+import axiosInstance from '@/service/AxiosInstance'
+import { formatCurrency } from '@/utils/currencyFormatter'
 
 // Interfaces
 interface GuestSummary {
@@ -32,6 +36,14 @@ interface MealPlan {
   total_meal_cost: number
 }
 
+interface HallBooking {
+  hall_name: string
+  hall_price: string
+  start_date: string
+  end_date: string
+  amount: string
+}
+
 interface Bill {
   company_name: string
   check_in_date: string
@@ -39,8 +51,37 @@ interface Bill {
   nights: number
   guests: GuestSummary[]
   meal_plan: MealPlan | null
+  halls?: HallBooking[]
   total_accommodation: number
+  total_halls_cost?: number
+  // New charges sections
+  pos_charges?: Array<{
+    id: number
+    outlet: string
+    item: string
+    unit_price: number
+    quantity: number
+    total: number
+    notes?: string | null
+    posted_at?: string
+  }>
+  pos_charges_total?: number
+  custom_charges?: Array<{
+    id: number
+    description: string
+    category?: string
+    unit_price: number
+    quantity: number
+    total: number
+    tax_rate?: number | null
+  }>
+  custom_charges_total?: number
   grand_total: number
+  payment_status: 'paid' | 'pending' | 'overdue' | 'cancelled'
+  invoice_number?: string
+  created_at?: string
+  due_date?: string
+  notes?: string
 }
 
 // Composable
@@ -59,6 +100,18 @@ const isPrintLoading = ref(false)
 const isDownloading = ref(false)
 
 // Computed
+const currentDate = computed(() => 
+  new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+)
+
+const invoiceNumber = computed(() => 
+  `INV-${reservationCode.value}-${new Date().getFullYear()}`
+)
+
 const formattedCheckIn = computed(() =>
   bill.value ? new Date(bill.value.check_in_date).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -76,10 +129,52 @@ const formattedCheckOut = computed(() =>
 )
 
 const formattedTotal = computed(() =>
-  bill.value ? `$${bill.value.grand_total.toFixed(2)}` : '$0.00'
+  bill.value ? formatCurrency(bill.value.grand_total) : formatCurrency(0)
 )
 
 const totalGuests = computed(() => bill.value?.guests.length || 0)
+
+const totalHalls = computed(() => bill.value?.halls?.length || 0)
+
+const hasHalls = computed(() => totalHalls.value > 0)
+const hasPOSCharges = computed(() => (bill.value?.pos_charges?.length || 0) > 0)
+const hasCustomCharges = computed(() => (bill.value?.custom_charges?.length || 0) > 0)
+
+const isPaid = computed(() => bill.value?.payment_status === 'paid')
+
+const paymentStatusSeverity = computed(() => {
+  if (!bill.value) return 'secondary'
+  switch (bill.value.payment_status) {
+    case 'paid': return 'success'
+    case 'pending': return 'warning'
+    case 'overdue': return 'danger'
+    default: return 'secondary'
+  }
+})
+const paymentStatusIcon = computed(() => {
+  if (!bill.value) return 'pi pi-question'
+  switch (bill.value.payment_status) {
+    case 'paid': return 'pi pi-check-circle'
+    case 'pending': return 'pi pi-clock'
+    case 'overdue': return 'pi pi-exclamation-triangle'
+    default: return 'pi pi-question'
+  }
+})
+
+const paymentStatusLabel = computed(() => {
+  if (!bill.value) return 'Unknown'
+  return bill.value.payment_status.charAt(0).toUpperCase() + bill.value.payment_status.slice(1)
+})
+
+// Payment dialog state
+const showPaymentDialog = ref(false);
+const selectedPaymentMethod = ref('');
+const paymentMethods = [
+  { label: 'Cash', value: 'cash' },
+  { label: 'POS', value: 'pos' },
+  { label: 'Transfer', value: 'transfer' }
+];
+
 
 const averageRatePerNight = computed(() => {
   if (!bill.value || bill.value.guests.length === 0) return 0
@@ -90,7 +185,7 @@ const averageRatePerNight = computed(() => {
 const totalNights = computed(() => bill.value?.nights || 0)
 
 const formattedAverageRate = computed(() => 
-  averageRatePerNight.value ? `$${averageRatePerNight.value.toFixed(2)}` : '$0.00'
+  formatCurrency(averageRatePerNight.value)
 )
 
 const hasValidBill = computed(() => bill.value && !hasError.value)
@@ -115,7 +210,7 @@ const printBill = async () => {
       toast.add({
         severity: 'error',
         summary: 'Print Error',
-        detail: 'Unable to find bill content for printing',
+        detail: 'Unable to find invoice content for printing',
         life: 4000,
       });
       return;
@@ -133,152 +228,559 @@ const printBill = async () => {
     }
 
   printWindow.document.write(`
+    <!DOCTYPE html>
     <html>
       <head>
-        <title>Corporate Bill</title>
+        <title>Corporate Bill - ${bill.value?.company_name || 'Unknown Company'}</title>
+        <meta charset="UTF-8">
         <style>
           * {
             box-sizing: border-box;
-            max-width: 100%;
-          }
-
-          html, body {
             margin: 0;
             padding: 0;
-            font-family: 'Inter', sans-serif;
-            font-size: 12px;
-            color: #1f2937;
-            overflow-x: hidden;
           }
 
           body {
-            padding: 20px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #1f2937;
+            background: white;
+            padding: 20mm;
           }
 
           .bill-content {
-            max-width: 900px;
+            max-width: 210mm;
             margin: 0 auto;
-            line-height: 1.6;
-            overflow-wrap: break-word;
           }
 
-          .info-card, .guests-card, .summary-card {
-            background: white;
-            border: 1px solid #e5e7eb;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            border-radius: 0.75rem;
-            overflow: hidden;
-            page-break-inside: avoid;
-          }
-
-          .card-header {
-            font-weight: 600;
-            font-size: 1.2rem;
-            margin-bottom: 1rem;
-            border-bottom: 1px solid #e5e7eb;
-            padding-bottom: 0.5rem;
-          }
-
-          .info-grid {
+          /* Header */
+          .invoice-header {
             display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #1e293b;
           }
 
-          .info-section {
-            flex: 1 1 45%;
+          .hotel-branding {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
           }
 
-          .info-label {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            color: #6b7280;
+          .hotel-logo {
+            background: #1e293b;
+            color: white;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 24px;
+          }
+
+          .hotel-name {
+            font-size: 28px;
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: 5px;
+          }
+
+          .hotel-tagline {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 10px;
+          }
+
+          .hotel-contact {
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.4;
+          }
+
+          .invoice-details {
+            text-align: right;
+          }
+
+          .invoice-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 15px;
+          }
+
+          .invoice-meta {
+            font-size: 12px;
+            line-height: 1.6;
+          }
+
+          .invoice-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            min-width: 200px;
+          }
+
+          .label {
+            color: #64748b;
             font-weight: 500;
           }
 
-          .info-value {
-            font-size: 1rem;
+          .value {
+            color: #1e293b;
             font-weight: 600;
           }
 
+          /* Billing parties */
+          .billing-parties {
+            display: flex;
+            justify-content: space-between;
+            margin: 30px 0;
+            gap: 40px;
+          }
+
+          .bill-to, .stay-details {
+            flex: 1;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f9fafb;
+          }
+
+          .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
           .company-name {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #2563eb;
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 10px;
+          }
+
+          .billing-address {
+            color: #64748b;
+          }
+
+          .stay-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .stay-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+          }
+
+          .stay-label {
+            color: #64748b;
+            font-weight: 500;
+          }
+
+          .stay-value {
+            color: #1e293b;
+            font-weight: 600;
+          }
+
+          /* Table */
+          .accommodation-details, .hall-details {
+            margin: 30px 0;
+          }
+
+          .section-header {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
           }
 
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 1rem;
-            table-layout: auto;
+            margin-bottom: 20px;
+            font-size: 11px;
           }
 
           th, td {
-            padding: 0.75rem;
-            border: 1px solid #e5e7eb;
+            padding: 12px 8px;
             text-align: left;
-            word-break: break-word;
+            border: 1px solid #e5e7eb;
           }
 
           th {
-            background-color: #f3f4f6;
+            background: #f8fafc;
             font-weight: 600;
+            color: #374151;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .guest-name, .hall-name {
+            font-weight: 500;
+            color: #1e293b;
           }
 
           .amount {
-            font-weight: bold;
+            font-weight: 600;
             color: #059669;
-          }
-
-          .grand-total {
-            background: #f9fafb;
-            border: 2px solid #e5e7eb;
-            padding: 1rem;
-            border-radius: 0.75rem;
-            margin-top: 1.5rem;
             text-align: right;
-            clear: both;
+            font-family: monospace;
           }
 
-          .grand-total-value {
-            font-size: 1.5rem;
+          /* Summary */
+          .invoice-summary {
+            margin: 30px 0;
+            max-width: 400px;
+            margin-left: auto;
+          }
+
+          .summary-items {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+          }
+
+          .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid #f1f5f9;
+          }
+
+          .summary-item:last-child {
+            border-bottom: none;
+          }
+
+          .summary-label {
+            color: #374151;
+            font-weight: 500;
+          }
+
+          .summary-value {
+            font-weight: 600;
+            color: #1e293b;
+            font-family: monospace;
+          }
+
+          .total-item {
+            background: #f1f5f9;
+            border-top: 2px solid #d1d5db;
+          }
+
+          .total-value {
+            font-size: 16px;
             font-weight: 700;
             color: #059669;
           }
 
-          .note {
-            font-size: 0.75rem;
-            color: #6b7280;
+          /* Terms */
+          .terms {
+            margin-top: 40px;
+            padding: 20px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 10px;
+            color: #4b5563;
+          }
+
+          .terms h4 {
+            font-size: 12px;
+            color: #1e293b;
+            margin-bottom: 10px;
+          }
+
+          .terms ul {
+            margin: 10px 0;
+            padding-left: 15px;
+          }
+
+          .terms li {
+            margin-bottom: 5px;
+          }
+
+          .invoice-footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e7eb;
+          }
+
+          .thank-you {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 5px;
+          }
+
+          @page {
+            margin: 20mm;
+            size: A4;
           }
 
           @media print {
-            .print\\:hidden,
-            .header-actions {
-              display: none !important;
-            }
-
-            .bill-content {
-              width: 100%;
-              margin: 0 auto;
-              padding: 0;
-            }
-
-            .info-card, .guests-card, .summary-card {
-              page-break-inside: avoid;
+            body {
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
             }
           }
         </style>
       </head>
       <body>
         <div class="bill-content">
-          ${billContent}
+          <!-- Header -->
+          <div class="invoice-header">
+            <div class="hotel-branding">
+              <div class="hotel-logo">🏨</div>
+              <div class="hotel-info">
+                <div class="hotel-name">Premium Hotel Management</div>
+                <div class="hotel-tagline">Excellence in Hospitality</div>
+                <div class="hotel-contact">
+                  📞 +234 (0) 123 456 7890<br>
+                  📧 billing@premiumhotel.com<br>
+                  📍 Victoria Island, Lagos, Nigeria
+                </div>
+              </div>
+            </div>
+            <div class="invoice-details">
+              <div class="invoice-title">CORPORATE INVOICE</div>
+              <div class="invoice-meta">
+                <div class="invoice-item">
+                  <span class="label">Invoice #:</span>
+                  <span class="value">${invoiceNumber.value}</span>
+                </div>
+                <div class="invoice-item">
+                  <span class="label">Date:</span>
+                  <span class="value">${currentDate.value}</span>
+                </div>
+                <div class="invoice-item">
+                  <span class="label">Reservation:</span>
+                  <span class="value">${reservationCode.value}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Billing Parties -->
+          <div class="billing-parties">
+            <div class="bill-to">
+              <div class="section-title">Bill To</div>
+              <div class="company-name">${bill.value?.company_name}</div>
+              <div class="billing-address">
+                Corporate Billing Department<br>
+                ${bill.value?.company_name}<br>
+                Lagos, Nigeria
+              </div>
+            </div>
+            <div class="stay-details">
+              <div class="section-title">Stay Details</div>
+              <div class="stay-info">
+                <div class="stay-item">
+                  <span class="stay-label">Check-in:</span>
+                  <span class="stay-value">${formattedCheckIn.value}</span>
+                </div>
+                <div class="stay-item">
+                  <span class="stay-label">Check-out:</span>
+                  <span class="stay-value">${formattedCheckOut.value}</span>
+                </div>
+                <div class="stay-item">
+                  <span class="stay-label">Duration:</span>
+                  <span class="stay-value">${totalNights.value} nights</span>
+                </div>
+                <div class="stay-item">
+                  <span class="stay-label">Guests:</span>
+                  <span class="stay-value">${totalGuests.value} people</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Guest Details Table -->
+          <div class="accommodation-details">
+            <div class="section-header">Accommodation Details</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Guest Name</th>
+                  <th>Room No.</th>
+                  <th>Rate/Night</th>
+                  <th>Nights</th>
+                  <th style="text-align: right;">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bill.value?.guests.map(guest => 
+                  `<tr>
+                    <td class="guest-name">${guest.full_name}</td>
+                    <td>Room ${guest.room_number}</td>
+                    <td class="amount">${formatCurrency(guest.rate)}</td>
+                    <td>${guest.nights}</td>
+                    <td class="amount">${formatCurrency(guest.amount)}</td>
+                  </tr>`
+                ).join('') || ''}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Hall Bookings (if any) -->
+          ${bill.value?.halls && bill.value.halls.length > 0 ? `
+          <div class="hall-details">
+            <div class="section-header">Event Halls & Meeting Rooms</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Hall/Room Name</th>
+                  <th>Start Date</th>
+                  <th>End Date</th>
+                  <th>Duration</th>
+                  <th>Price/Day</th>
+                  <th style="text-align: right;">Total Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bill.value.halls.map(hall => 
+                  `<tr>
+                    <td class="hall-name">${hall.hall_name}</td>
+                    <td>${new Date(hall.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                    <td>${new Date(hall.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                    <td>${calculateDuration(hall.start_date, hall.end_date)}</td>
+                    <td class="amount">${formatCurrency(parseFloat(hall.hall_price))}</td>
+                    <td class="amount">${formatCurrency(parseFloat(hall.amount))}</td>
+                  </tr>`
+                ).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- POS Charges (if any) -->
+          ${bill.value?.pos_charges && bill.value.pos_charges.length > 0 ? `
+          <div class="pos-charges-details">
+            <div class="section-header">POS Charges</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Outlet</th>
+                  <th>Item</th>
+                  <th>Unit Price</th>
+                  <th>Qty</th>
+                  <th style="text-align: right;">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bill.value.pos_charges.map(ch => 
+                  `<tr>
+                    <td>${ch.posted_at ? new Date(ch.posted_at).toLocaleString('en-US') : '-'}</td>
+                    <td>${ch.outlet}</td>
+                    <td>${ch.item}</td>
+                    <td class="amount">${formatCurrency(ch.unit_price)}</td>
+                    <td>${ch.quantity}</td>
+                    <td class="amount">${formatCurrency(ch.total)}</td>
+                  </tr>`
+                ).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Custom Charges (if any) -->
+          ${bill.value?.custom_charges && bill.value.custom_charges.length > 0 ? `
+          <div class="custom-charges-details">
+            <div class="section-header">Custom Charges</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Category</th>
+                  <th>Unit Price</th>
+                  <th>Qty</th>
+                  <th>Tax %</th>
+                  <th style="text-align: right;">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bill.value.custom_charges.map(ch => 
+                  `<tr>
+                    <td>${ch.description}</td>
+                    <td>${ch.category ?? '-'}</td>
+                    <td class="amount">${formatCurrency(ch.unit_price)}</td>
+                    <td>${ch.quantity}</td>
+                    <td>${ch.tax_rate ?? '-'}</td>
+                    <td class="amount">${formatCurrency(ch.total)}</td>
+                  </tr>`
+                ).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Invoice Summary -->
+          <div class="invoice-summary">
+            <div class="section-header">Invoice Summary</div>
+            <div class="summary-items">
+              <div class="summary-item">
+                <span class="summary-label">Accommodation Total:</span>
+                <span class="summary-value">${formatCurrency(bill.value?.total_accommodation || 0)}</span>
+              </div>
+              ${bill.value?.halls && bill.value.halls.length > 0 ? 
+                `<div class="summary-item">
+                  <span class="summary-label">Event Halls Total:</span>
+                  <span class="summary-value">${formatCurrency(bill.value?.total_halls_cost || 0)}</span>
+                </div>`
+                : ''}
+              ${bill.value?.meal_plan ? 
+                `<div class="summary-item">
+                  <span class="summary-label">Meal Plan (${bill.value.meal_plan.name}):</span>
+                  <span class="summary-value">${formatCurrency(bill.value.meal_plan.total_meal_cost)}</span>
+                </div>`
+                : ''}
+              <div class="summary-item">
+                <span class="summary-label">VAT (7.5%):</span>
+                <span class="summary-value">${formatCurrency((bill.value?.grand_total || 0) * 0.075)}</span>
+              </div>
+              <div class="summary-item total-item">
+                <span class="summary-label"><strong>Total Amount Due:</strong></span>
+                <span class="summary-value total-value">${formatCurrency(bill.value?.grand_total || 0)}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Terms -->
+          <div class="terms">
+            <h4>Terms & Conditions</h4>
+            <ul>
+              <li>Payment is due within 30 days of invoice date.</li>
+              <li>Late payments may incur additional charges.</li>
+              <li>All rates are inclusive of service charges unless stated otherwise.</li>
+              <li>Cancellation policies apply as per booking agreement.</li>
+              <li>Disputes must be reported within 7 days of invoice receipt.</li>
+            </ul>
+            <div class="invoice-footer">
+              <div class="thank-you">Thank you for choosing Premium Hotel Management!</div>
+              <div>For billing inquiries, contact us at billing@premiumhotel.com or +234 (0) 123 456 7890</div>
+            </div>
+          </div>
         </div>
+
         <script>
           window.onload = function () {
-            window.print();
-            setTimeout(() => window.close(), 100);
+            setTimeout(() => {
+              window.print();
+              setTimeout(() => window.close(), 500);
+            }, 500);
           };
         <\/script>
       </body>
@@ -290,7 +792,7 @@ const printBill = async () => {
     toast.add({
       severity: 'success',
       summary: 'Print Ready',
-      detail: 'Bill is ready for printing',
+      detail: 'Professional invoice is ready for printing',
       life: 3000,
     });
   } catch (error) {
@@ -298,7 +800,7 @@ const printBill = async () => {
     toast.add({
       severity: 'error',
       summary: 'Print Error',
-      detail: 'An error occurred while preparing the bill for printing',
+      detail: 'An error occurred while preparing the invoice for printing',
       life: 4000,
     });
   } finally {
@@ -308,7 +810,12 @@ const printBill = async () => {
 
 
 const goBack = () => {
-  router.back()
+  // Prefer navigating back if there is history; otherwise go to Booking Management
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push({ name: 'managebookings' });
+  }
 }
 
 const confirmPrint = () => {
@@ -444,6 +951,71 @@ const getInitials = (name: string) => {
   return name.split(' ').map(n => n[0]).join('').toUpperCase()
 }
 
+const calculateDuration = (startDate: string, endDate: string) => {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const diffTime = Math.abs(end.getTime() - start.getTime())
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  return `${diffDays} ${diffDays === 1 ? 'day' : 'days'}`
+}
+
+// Handle payment completion
+const handleCompletePayment = async () => {
+  if (!selectedPaymentMethod.value) {
+    toast.add({ 
+      severity: 'warn', 
+      summary: 'Warning', 
+      detail: 'Please select a payment method', 
+      life: 3000 
+    });
+    return;
+  }
+
+  const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+  const token = userData?.token;
+
+  if (!token) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: 'Authentication token missing', 
+      life: 3000 
+    });
+    return;
+  }
+
+  try {
+    await axiosInstance.post(`/admin/complete-corporate-payment`, {
+      reservation_code: reservationCode.value,
+      payment_method: selectedPaymentMethod.value
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Success', 
+      detail: 'Payment completed successfully', 
+      life: 3000 
+    });
+
+    // Close the payment dialog
+    showPaymentDialog.value = false;
+    selectedPaymentMethod.value = '';
+    
+    // Refresh the bill to get updated payment status
+    await refreshBill();
+    
+  } catch (error: any) {
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: error.response?.data?.message || 'Failed to complete payment', 
+      life: 3000 
+    });
+  }
+};
+
 // Lifecycle
 onMounted(async () => {
   const code = reservationCode.value
@@ -466,7 +1038,7 @@ onMounted(async () => {
         life: 3000 
       })
       setTimeout(() => {
-        router.push({ name: 'CorporateBookings' })
+        router.push({ name: 'managebookings' })
       }, 2000)
       return
     }
@@ -488,56 +1060,97 @@ onMounted(async () => {
 
 <template>
   <div class="corporate-bill">
-    <!-- Header Section -->
+    <!-- Professional Header Section -->
     <div class="bill-header">
       <div class="header-content">
-        <div class="header-left">
-          <div class="company-logo">
+        <!-- Hotel Branding -->
+        <div class="hotel-branding">
+          <div class="hotel-logo">
             <i class="pi pi-building text-4xl text-white"></i>
           </div>
-          <div class="header-success">
-            <h1 class="page-title">Corporate Bill</h1>
-            <p class="page-subtitle">Accommodation invoice</p>
+          <div class="hotel-info">
+            <h1 class="hotel-name">Premium Hotel Management</h1>
+            <p class="hotel-tagline">Excellence in Hospitality</p>
+            <div class="hotel-contact">
+              <span><i class="pi pi-phone mr-1"></i> +234 (0) 123 456 7890</span>
+              <span><i class="pi pi-envelope mr-1"></i> billing@premiumhotel.com</span>
+              <span><i class="pi pi-map-marker mr-1"></i> Victoria Island, Lagos, Nigeria</span>
+            </div>
           </div>
         </div>
-        <div class="header-actions print:hidden">
+        
+        <!-- Action Buttons -->
+        <div class="header-actions">
           <Button
-            label="Refresh"
-            icon="pi pi-refresh"
-            severity="info"
-            outlined
-            @click="refreshBill"
-            :disabled="isLoading"
-            class="mr-2"
+            label="Back"
+            icon="pi pi-arrow-left"
+            severity="secondary"
+            text
+            @click="goBack"
+            class="back-button"
           />
           <Button
-            label="Download"
-            icon="pi pi-download"
+            v-if="!isPaid"
+            label="Complete Payment"
+            icon="pi pi-credit-card"
+            severity="success"
+            @click="showPaymentDialog = true"
+          />
+          <Button
+            label="Print Invoice"
+            icon="pi pi-print"
             severity="secondary"
+            outlined
+            @click="confirmPrint"
+            :disabled="!canPrint"
+            :loading="isPrintLoading"
+          />
+          <Button
+            label="Download PDF"
+            icon="pi pi-download"
+            severity="info"
             outlined
             @click="downloadBill"
             :disabled="!canDownload"
             :loading="isDownloading"
-            class="mr-2"
           />
           <Button
-            label="Print Bill"
-            icon="pi pi-print"
-            severity="success"
-            @click="confirmPrint"
-            :disabled="!canPrint"
-            :loading="isPrintLoading"
-            class="mr-3"
-          />
-          <Button
-            label="Back"
-            icon="pi pi-arrow-left"
-            severity="danger"
-            outlined
-            @click="goBack"
+            label="Refresh"
+            icon="pi pi-refresh"
+            severity="secondary"
+            text
+            @click="refreshBill"
+            :disabled="isLoading"
           />
         </div>
+        <!-- Invoice Details -->
+        <div class="invoice-details">              
+       
+          <div class="invoice-header">
+            <h2 class="invoice-title">CORPORATE BILL</h2>
+          </div>
+          <div class="invoice-meta">
+            <div class="invoice-item">
+              <span class="label">Payment Status: </span>
+            <span class="value"><Badge :value="paymentStatusLabel" :severity="paymentStatusSeverity"  />
+                </span>
+            </div>
+            <div class="invoice-item">
+              <span class="label">Invoice #:</span>
+              <span class="value">{{ invoiceNumber }}</span>
+            </div>
+            <div class="invoice-item">
+              <span class="label">Date Issued:</span>
+              <span class="value">{{ currentDate }}</span>
+            </div>
+            <div class="invoice-item">
+              <span class="label">Reservation:</span>
+              <span class="value">{{ reservationCode }}</span>
+            </div>
+          </div>
+        </div>
       </div>
+      
     </div>
 
     <!-- Main Content -->
@@ -547,8 +1160,8 @@ onMounted(async () => {
         <template #content>
           <div class="loading-container">
             <ProgressSpinner style="width: 60px; height: 60px" strokeWidth="3" />
-            <h3 class="loading-title">Loading Bill Details</h3>
-            <p class="loading-text">Please wait while we fetch your corporate bill...</p>
+            <h3 class="loading-title">Loading Invoice Details</h3>
+            <p class="loading-text">Please wait while we prepare your corporate invoice...</p>
           </div>
         </template>
       </Card>
@@ -581,111 +1194,78 @@ onMounted(async () => {
         </div>
       </Message>
 
-      <!-- Bill Content -->
-      <div v-else-if="hasValidBill" class="bill-sections">
-        <!-- Quick Statistics Panel -->
-        <Panel header="Quick Overview" class="stats-panel" toggleable collapsed>
-          <div class="quick-stats">
-            <div class="stat-item">
-              <i class="pi pi-users stat-icon"></i>
-              <div class="stat-info">
-                <span class="stat-label">Total Guests</span>
-                <span class="stat-value">{{ totalGuests }}</span>
+      <!-- Invoice Content -->
+      <div v-else-if="hasValidBill" class="invoice-sections">
+        <!-- Company and Billing Information -->
+        <div class="billing-parties">
+          <Card class="bill-to-card">
+            <template #title>
+              <div class="card-header">
+                <i class="pi pi-building"></i>
+                <span>Bill To</span>
               </div>
-            </div>
-            <div class="stat-item">
-              <i class="pi pi-calendar stat-icon"></i>
-              <div class="stat-info">
-                <span class="stat-label">Total Nights</span>
-                <span class="stat-value">{{ totalNights }}</span>
-              </div>
-            </div>
-            <div class="stat-item">
-              <i class="pi pi-dollar stat-icon"></i>
-              <div class="stat-info">
-                <span class="stat-label">Average Rate/Night</span>
-                <span class="stat-value">{{ formattedAverageRate }}</span>
-              </div>
-            </div>
-            <div class="stat-item">
-              <i class="pi pi-wallet stat-icon"></i>
-              <div class="stat-info">
-                <span class="stat-label">Grand Total</span>
-                <span class="stat-value highlight">{{ formattedTotal }}</span>
-              </div>
-            </div>
-          </div>
-        </Panel>
-        <!-- Company and Stay Information -->
-        <Card class="info-card">
-          <template #title>
-            <div class="card-header">
-              <i class="pi pi-info-circle"></i>
-              <span>Booking Information</span>
-            </div>
-          </template>
-          <template #content>
-            <div class="info-grid">
-              <div class="info-section">
-                <div class="info-item">
-                  <label class="info-label">Company Name</label>
-                  <p class="info-value company-name">{{ bill.company_name }}</p>
-                </div>
-                <div class="info-item">
-                  <label class="info-label">Reservation Code</label>
-                  <p class="info-value">
-                    <Chip 
-                      :label="reservationCode" 
-                      icon="pi pi-tag"
-                      class="reservation-chip"
-                    />
-                  </p>
+            </template>
+            <template #content>
+              <div class="company-details">
+                <h3 class="company-name">{{ bill.company_name }}</h3>
+                <div class="billing-address">
+                  <p class="address-line">Corporate Billing Department</p>
+                  <p class="address-line">{{ bill.company_name }}</p>
+                  <p class="address-line">Lagos, Nigeria</p>
                 </div>
               </div>
-              <div class="info-section">
-                <div class="info-item">
-                  <label class="info-label">Check-in Date</label>
-                  <p class="info-value">
-                    <i class="pi pi-calendar-plus text-green-600 mr-2"></i>
-                    {{ formattedCheckIn }}
-                  </p>
-                </div>
-                <div class="info-item">
-                  <label class="info-label">Check-out Date</label>
-                  <p class="info-value">
-                    <i class="pi pi-calendar-minus text-red-600 mr-2"></i>
-                    {{ formattedCheckOut }}
-                  </p>
-                </div>
-                
-              </div>
-            </div>
-          </template>
-        </Card>
+            </template>
+          </Card>
 
-        <!-- Guest Details -->
-        <Card class="guests-card">
+          <Card class="stay-details-card">
+            <template #title>
+              <div class="card-header">
+                <i class="pi pi-calendar"></i>
+                <span>Stay Details</span>
+              </div>
+            </template>
+            <template #content>
+              <div class="stay-info">
+                <div class="stay-item">
+                  <span class="stay-label">Check-in:</span>
+                  <span class="stay-value">{{ formattedCheckIn }}</span>
+                </div>
+                <div class="stay-item">
+                  <span class="stay-label">Check-out:</span>
+                  <span class="stay-value">{{ formattedCheckOut }}</span>
+                </div>
+                <div class="stay-item">
+                  <span class="stay-label">Duration:</span>
+                  <span class="stay-value">{{ totalNights }} nights</span>
+                </div>
+                <div class="stay-item">
+                  <span class="stay-label">Guests:</span>
+                  <span class="stay-value">{{ totalGuests }} people</span>
+                </div>
+              </div>
+            </template>
+          </Card>
+        </div>
+
+        <!-- Guest Accommodation Details -->
+        <Card class="accommodation-card">
           <template #title>
             <div class="card-header">
               <i class="pi pi-users"></i>
-              <span>Guest Details</span>
-              <Chip 
-                :label="`${totalGuests} Guests`" 
-                icon="pi pi-users"
-                class="guests-count-chip"
-              />
+              <span>Accommodation Details</span>
             </div>
           </template>
           <template #content>
             <DataTable 
               :value="bill.guests" 
               responsiveLayout="scroll" 
-              class="enhanced-table"
+              class="professional-table"
               stripedRows
               :paginator="bill.guests.length > 10"
               :rows="10"
+              :showGridlines="true"
             >
-              <Column field="full_name" header="Guest Name" sortable>
+              <Column field="full_name" header="Guest Name" sortable class="name-column">
                 <template #body="slotProps">
                   <div class="guest-cell">
                     <Avatar 
@@ -697,64 +1277,269 @@ onMounted(async () => {
                   </div>
                 </template>
               </Column>
-              <Column field="room_number" header="Room" sortable>
+              <Column field="room_number" header="Room No." sortable class="room-column">
                 <template #body="slotProps">
-                  <Badge :value="slotProps.data.room_number" severity="secondary" />
+                  <Badge :value="'Room ' + slotProps.data.room_number" severity="info" />
                 </template>
               </Column>
-              <Column field="rate" header="Rate/Night" sortable>
+              <Column field="rate" header="Rate/Night" sortable class="rate-column">
                 <template #body="slotProps">
-                  <span class="amount-text">${{ slotProps.data.rate.toFixed(2) }}</span>
+                  <span class="amount-text">{{ formatCurrency(slotProps.data.rate) }}</span>
                 </template>
               </Column>
-              <Column field="nights" header="Nights" sortable>
+              <Column field="nights" header="Nights" sortable class="nights-column">
                 <template #body="slotProps">
-                  <span class="nights-badge">{{ slotProps.data.nights }}</span>
+                  <span class="nights-value">{{ slotProps.data.nights }}</span>
                 </template>
               </Column>
-              <Column field="amount" header="Total" sortable>
+              <Column field="amount" header="Subtotal" sortable class="amount-column">
                 <template #body="slotProps">
-                  <span class="total-amount-cell">${{ slotProps.data.amount.toFixed(2) }}</span>
+                  <span class="subtotal-amount">{{ formatCurrency(slotProps.data.amount) }}</span>
                 </template>
               </Column>
             </DataTable>
           </template>
         </Card>
 
-        <!-- Cost Breakdown -->
+        <!-- Hall Bookings Details -->
+        <Card v-if="hasHalls" class="halls-card">
+          <template #title>
+            <div class="card-header">
+              <i class="pi pi-home"></i>
+              <span>Event Halls & Meeting Rooms</span>
+              <Chip 
+                :label="`${totalHalls} ${totalHalls === 1 ? 'Hall' : 'Halls'}`" 
+                icon="pi pi-home"
+                class="halls-count-chip"
+              />
+            </div>
+          </template>
+          <template #content>
+            <DataTable 
+              :value="bill.halls" 
+              responsiveLayout="scroll" 
+              class="professional-table halls-table"
+              stripedRows
+              :paginator="bill.halls && bill.halls.length > 5"
+              :rows="5"
+              :showGridlines="true"
+            >
+              <Column field="hall_name" header="Hall/Room Name" sortable class="hall-name-column">
+                <template #body="slotProps">
+                  <div class="hall-cell">
+                    <i class="pi pi-home hall-icon"></i>
+                    <div class="hall-info">
+                      <span class="hall-name">{{ slotProps.data.hall_name }}</span>
+                    </div>
+                  </div>
+                </template>
+              </Column>
+              <Column field="start_date" header="Start Date" sortable class="date-column">
+                <template #body="slotProps">
+                  <div class="booking-date">
+                    <i class="pi pi-calendar text-blue-600 mr-1"></i>
+                    {{ new Date(slotProps.data.start_date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    }) }}
+                  </div>
+                </template>
+              </Column>
+              <Column field="end_date" header="End Date" sortable class="date-column">
+                <template #body="slotProps">
+                  <div class="booking-date">
+                    <i class="pi pi-calendar text-red-600 mr-1"></i>
+                    {{ new Date(slotProps.data.end_date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    }) }}
+                  </div>
+                </template>
+              </Column>
+              <Column field="duration" header="Duration" sortable class="duration-column">
+                <template #body="slotProps">
+                  <div class="duration-badge">
+                    {{ calculateDuration(slotProps.data.start_date, slotProps.data.end_date) }}
+                  </div>
+                </template>
+              </Column>
+              <Column field="hall_price" header="Price/Day" sortable class="price-column">
+                <template #body="slotProps">
+                  <span class="price-text">{{ formatCurrency(parseFloat(slotProps.data.hall_price)) }}</span>
+                </template>
+              </Column>
+              <Column field="amount" header="Total Amount" sortable class="amount-column">
+                <template #body="slotProps">
+                  <span class="hall-total-amount">{{ formatCurrency(parseFloat(slotProps.data.amount)) }}</span>
+                </template>
+              </Column>
+            </DataTable>
+          </template>
+        </Card>
+
+        <!-- POS Charges Details -->
+        <Card v-if="hasPOSCharges" class="pos-charges-card">
+          <template #title>
+            <div class="card-header">
+              <i class="pi pi-shopping-cart"></i>
+              <span>POS Charges</span>
+              <Chip 
+                :label="`${bill.pos_charges?.length || 0} Item(s)`" 
+                icon="pi pi-list"
+                class="pos-count-chip"
+              />
+            </div>
+          </template>
+          <template #content>
+            <DataTable 
+              :value="bill.pos_charges" 
+              responsiveLayout="scroll" 
+              class="professional-table pos-table"
+              stripedRows
+              :paginator="(bill.pos_charges?.length || 0) > 10"
+              :rows="10"
+              :showGridlines="true"
+            >
+              <Column field="posted_at" header="Date" sortable>
+                <template #body="slotProps">
+                  {{ slotProps.data.posted_at ? new Date(slotProps.data.posted_at).toLocaleString('en-US') : '-' }}
+                </template>
+              </Column>
+              <Column field="outlet" header="Outlet" sortable />
+              <Column field="item" header="Item" sortable />
+              <Column field="unit_price" header="Unit Price" sortable>
+                <template #body="slotProps">
+                  {{ formatCurrency(slotProps.data.unit_price) }}
+                </template>
+              </Column>
+              <Column field="quantity" header="Qty" sortable />
+              <Column field="total" header="Line Total" sortable>
+                <template #body="slotProps">
+                  <span class="amount-text">{{ formatCurrency(slotProps.data.total) }}</span>
+                </template>
+              </Column>
+              <Column field="notes" header="Notes" />
+            </DataTable>
+          </template>
+        </Card>
+
+        <!-- Custom Charges Details -->
+        <Card v-if="hasCustomCharges" class="custom-charges-card">
+          <template #title>
+            <div class="card-header">
+              <i class="pi pi-plus-circle"></i>
+              <span>Custom Charges</span>
+              <Chip 
+                :label="`${bill.custom_charges?.length || 0} Charge(s)`" 
+                icon="pi pi-list"
+                class="custom-count-chip"
+              />
+            </div>
+          </template>
+          <template #content>
+            <DataTable 
+              :value="bill.custom_charges" 
+              responsiveLayout="scroll" 
+              class="professional-table custom-table"
+              stripedRows
+              :paginator="(bill.custom_charges?.length || 0) > 10"
+              :rows="10"
+              :showGridlines="true"
+            >
+              <Column field="description" header="Description" sortable />
+              <Column field="category" header="Category" sortable />
+              <Column field="unit_price" header="Unit Price" sortable>
+                <template #body="slotProps">
+                  {{ formatCurrency(slotProps.data.unit_price) }}
+                </template>
+              </Column>
+              <Column field="quantity" header="Qty" sortable />
+              <Column field="total" header="Line Total" sortable>
+                <template #body="slotProps">
+                  <span class="amount-text">{{ formatCurrency(slotProps.data.total) }}</span>
+                </template>
+              </Column>
+              <Column field="tax_rate" header="Tax %">
+                <template #body="slotProps">
+                  {{ slotProps.data.tax_rate ?? '-' }}
+                </template>
+              </Column>
+            </DataTable>
+          </template>
+        </Card>
+
+        <!-- Cost Summary -->
         <Card class="summary-card">
           <template #title>
             <div class="card-header">
               <i class="pi pi-calculator"></i>
-              <span>Cost Breakdown</span>
+              <span>Invoice Summary</span>
             </div>
           </template>
           <template #content>
-            <div class="cost-breakdown">
-              <div class="cost-items">
-                <div class="cost-item">
-                  <div class="cost-label">
-                    <i class="pi pi-home text-blue-600 mr-2"></i>
-                    Accommodation Total
-                  </div>
-                  <div class="cost-value">${{ bill.total_accommodation.toFixed(2) }}</div>
+            <div class="invoice-summary">
+              <div class="summary-items">
+                <div class="summary-item">
+                  <span class="summary-label">Accommodation Total:</span>
+                  <span class="summary-value">{{ formatCurrency(bill.total_accommodation) }}</span>
                 </div>
-                <div v-if="bill.meal_plan" class="cost-item">
-                  <div class="cost-label">
-                    <i class="pi pi-shopping-cart text-green-600 mr-2"></i>
-                    Meal Plan - {{ bill.meal_plan.name }}
-                    <small class="meal-rate">(${{ bill.meal_plan.rate_per_day }}/day)</small>
-                  </div>
-                  <div class="cost-value">${{ bill.meal_plan.total_meal_cost.toFixed(2) }}</div>
+                <div v-if="hasHalls" class="summary-item">
+                  <span class="summary-label">Event Halls Total:</span>
+                  <span class="summary-value">{{ formatCurrency(bill.total_halls_cost || 0) }}</span>
                 </div>
-                <Divider />
-                <div class="cost-item grand-total">
-                  <div class="cost-label">
-                    <i class="pi pi-wallet text-orange-600 mr-2"></i>
-                    <strong>Grand Total</strong>
-                  </div>
-                  <div class="cost-value grand-total-value">{{ formattedTotal }}</div>
+                <div v-if="bill.meal_plan" class="summary-item">
+                  <span class="summary-label">
+                    Meal Plan ({{ bill.meal_plan.name }}):
+                    <small class="meal-details">{{ formatCurrency(bill.meal_plan.rate_per_day) }}/day</small>
+                  </span>
+                  <span class="summary-value">{{ formatCurrency(bill.meal_plan.total_meal_cost) }}</span>
                 </div>
+                <div v-if="hasPOSCharges" class="summary-item">
+                  <span class="summary-label">POS Charges Total:</span>
+                  <span class="summary-value">{{ formatCurrency(bill.pos_charges_total || 0) }}</span>
+                </div>
+                <div v-if="hasCustomCharges" class="summary-item">
+                  <span class="summary-label">Custom Charges Total:</span>
+                  <span class="summary-value">{{ formatCurrency(bill.custom_charges_total || 0) }}</span>
+                </div>
+                <div class="summary-item tax-item">
+                  <span class="summary-label">VAT (7.5%):</span>
+                  <span class="summary-value">{{ formatCurrency(bill.grand_total * 0.075) }}</span>
+                </div>
+                <Divider class="summary-divider" />
+                <div class="summary-item total-item">
+                  <span class="summary-label">
+                    <strong>Total Amount Due:</strong>
+                  </span>
+                  <span class="summary-value total-value">{{ formattedTotal }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </Card>
+
+        <!-- Terms and Conditions -->
+        <Card class="terms-card print-visible">
+          <template #title>
+            <div class="card-header">
+              <i class="pi pi-file-text"></i>
+              <span>Terms & Conditions</span>
+            </div>
+          </template>
+          <template #content>
+            <div class="terms-content">
+              <ul class="terms-list">
+                <li>Payment is due within 30 days of invoice date.</li>
+                <li>Late payments may incur additional charges.</li>
+                <li>All rates are inclusive of service charges unless stated otherwise.</li>
+                <li>Cancellation policies apply as per booking agreement.</li>
+                <li>Disputes must be reported within 7 days of invoice receipt.</li>
+              </ul>
+              <div class="invoice-footer">
+                <p class="thank-you">Thank you for choosing Premium Hotel Management!</p>
+                <p class="contact-info">For billing inquiries, contact us at billing@premiumhotel.com or +234 (0) 123 456 7890</p>
               </div>
             </div>
           </template>
@@ -764,78 +1549,251 @@ onMounted(async () => {
     
     <!-- Confirmation Dialog -->
     <ConfirmDialog />
+
+    <!-- Payment Dialog -->
+    <Dialog
+      :visible="showPaymentDialog"
+      header="Complete Payment"
+      :modal="true"
+      :style="{ width: '450px' }"
+      @update:visible="showPaymentDialog = $event"
+      class="payment-dialog"
+    >
+      <div class="payment-dialog-content">
+        <div class="payment-summary">
+          <div class="payment-amount-display">
+            <span class="amount-label">Total Amount:</span>
+            <span class="amount-value">{{ formatCurrency(bill?.grand_total || 0) }}</span>
+          </div>
+        </div>
+        
+        <div class="payment-method-selection">
+          <label for="payment-method" class="payment-method-label">Select Payment Method</label>
+          <Dropdown
+            id="payment-method"
+            v-model="selectedPaymentMethod"
+            :options="paymentMethods"
+            option-label="label"
+            option-value="value"
+            placeholder="Choose payment method"
+            class="w-full payment-dropdown"
+          />
+        </div>
+      </div>
+      
+      <template #footer>
+        <div class="payment-dialog-footer">
+          <Button
+            label="Cancel"
+            icon="pi pi-times"
+            severity="secondary"
+            outlined
+            @click="showPaymentDialog = false; selectedPaymentMethod = ''"
+          />
+          <Button
+            label="Complete Payment"
+            icon="pi pi-check"
+            severity="success"
+            :disabled="!selectedPaymentMethod"
+            @click="handleCompletePayment"
+          />
+        </div>
+      </template>
+    </Dialog>
   </div>
 </template>
 
 <style scoped>
+/* Professional Invoice Styling */
 .corporate-bill {
   min-height: 100vh;
-  background: #f8fafc;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
 }
 
+/* Professional Header */
 .bill-header {
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 2rem 0;
-  margin-bottom: 2rem;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  color: white;
+  padding: 4rem 0 3rem 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.bill-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="80" cy="80" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="40" cy="60" r="1" fill="rgba(255,255,255,0.05)"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grain)"/></svg>');
+  pointer-events: none;
 }
 
 .header-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1.5rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 0 2rem;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 3rem;
+  align-items: start;
+  position: relative;
+  z-index: 1;
 }
 
-.header-left {
+/* Hotel Branding */
+.hotel-branding {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1.5rem;
 }
 
-.company-logo {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  padding: 1rem;
+.hotel-logo {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  padding: 1.25rem;
   border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+  min-width: 80px;
+  min-height: 80px;
 }
 
-.page-title {
+.hotel-info {
+  flex: 1;
+}
+
+.hotel-name {
   font-size: 2.5rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, #1f2937, #374151);
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.page-subtitle {
-  color: #6b7280;
+.hotel-tagline {
   font-size: 1.1rem;
-  margin: 0.25rem 0 0 0;
+  color: #cbd5e1;
+  margin: 0 0 1rem 0;
+  font-weight: 500;
 }
 
-.header-actions {
+.hotel-contact {
   display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+.hotel-contact span {
+  display: flex;
+  align-items: center;
+}
+
+.hotel-contact i {
+  width: 16px;
+  color: #64748b;
+}
+
+/* Invoice Details */
+.invoice-details {
+  text-align: right;
+}
+
+.invoice-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.invoice-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0;
+  color: white;
+  letter-spacing: -0.025em;
+}
+
+.payment-status-badge {
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+}
+
+.invoice-meta {
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
 }
 
-.bill-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem 3rem 1.5rem;
+.invoice-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 280px;
 }
 
-.loading-card {
+.invoice-item .label {
+  font-weight: 500;
+  color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.invoice-item .value {
+  font-weight: 600;
+  color: white;
+  font-size: 0.95rem;
+}
+
+/* Header Actions */
+.header-actions {
+  position: absolute;
+  bottom: 13rem;
+  right: 2rem;
+  display: flex;
+  gap: 0.75rem;
+  z-index: 2;
+}
+
+.back-button {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  backdrop-filter: blur(10px);
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Main Content */
+.bill-content {
+  max-width: 1200px;
+  margin: -2rem auto 0;
+  padding: 0 2rem 4rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* Loading and Error States */
+.loading-card,
+.error-message {
   background: white;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: none;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border-radius: 1rem;
+  margin-bottom: 2rem;
 }
 
 .loading-container {
@@ -860,186 +1818,154 @@ onMounted(async () => {
   margin: 0;
 }
 
-.bill-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-/* Stats Panel Styles */
-.stats-panel {
-  margin-bottom: 2rem;
-  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.quick-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  padding: 1rem;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.stat-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-.stat-icon {
-  font-size: 1.5rem;
-  color: #3b82f6;
-  background: #eff6ff;
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-}
-
-.stat-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.stat-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.stat-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1f2937;
-}
-
-.stat-value.highlight {
-  color: #059669;
-  font-size: 1.5rem;
-}
-
-/* Chip Styles */
-.reservation-chip {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
-  color: white !important;
-  border: none !important;
-  font-weight: 600;
-  padding: 0.5rem 1rem;
-}
-
-.guests-count-chip {
-  background: linear-gradient(135deg, #059669, #047857) !important;
-  color: white !important;
-  border: none !important;
-  font-weight: 600;
-}
-
-/* Error Message Styles */
-.error-message {
-  margin: 2rem;
-  border-radius: 0.75rem;
-  border: 1px solid #fee2e2;
-  background: linear-gradient(135deg, #fef2f2, #fee2e2);
-}
-
 .error-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 2rem;
-}
-
-.error-content i {
-  color: #dc2626;
-  margin-bottom: 1rem;
-}
-
-.error-content h3 {
-  color: #1f2937;
-  margin: 0 0 1.5rem 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+  padding: 3rem 2rem;
 }
 
 .error-actions {
   display: flex;
   gap: 0.75rem;
-  flex-wrap: wrap;
-  justify-content: center;
+  margin-top: 1.5rem;
 }
 
-.info-card,
-.guests-card,
-.summary-card {
+/* Invoice Sections */
+.invoice-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Billing Parties */
+.billing-parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.bill-to-card,
+.stay-details-card {
   background: white;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  border-radius: 0.75rem;
+  border: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.company-details {
+  padding: 0.5rem 0;
+}
+
+.company-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 1rem 0;
+}
+
+.billing-address {
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.address-line {
+  margin: 0.25rem 0;
+}
+
+.stay-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stay-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.stay-item:last-child {
+  border-bottom: none;
+}
+
+.stay-label {
+  font-weight: 500;
+  color: #64748b;
+}
+
+.stay-value {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Cards */
+.accommodation-card,
+.halls-card,
+.summary-card,
+.terms-card {
+  background: white;
+  border: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 1rem;
+  overflow: hidden;
 }
 
 .card-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: #1f2937;
+  color: #1e293b;
   font-weight: 600;
+  font-size: 1.1rem;
 }
 
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
+.card-header i {
+  color: #3b82f6;
+  font-size: 1.2rem;
 }
 
-.info-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+/* Halls Count Chip */
+.halls-count-chip {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: white !important;
+  border: none !important;
+  font-weight: 600;
+  margin-left: auto;
 }
 
-.info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+/* Professional Table */
+.professional-table {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
 }
 
-.info-label {
+.professional-table :deep(.p-datatable-thead > tr > th) {
+  background: #f8fafc;
+  color: #374151;
+  font-weight: 600;
   font-size: 0.875rem;
-  font-weight: 600;
-  color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  padding: 1rem;
+  border: none;
+  border-bottom: 2px solid #e5e7eb;
 }
 
-.info-value {
-  font-size: 1rem;
-  color: #1f2937;
-  margin: 0;
-  display: flex;
-  align-items: center;
+.professional-table :deep(.p-datatable-tbody > tr > td) {
+  padding: 1rem;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.95rem;
 }
 
-.company-name {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #3b82f6;
-}
-
-.enhanced-table {
-  border-radius: 0.75rem;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+.professional-table :deep(.p-datatable-tbody > tr:hover) {
+  background: #f8fafc;
 }
 
 .guest-cell {
@@ -1049,112 +1975,376 @@ onMounted(async () => {
 }
 
 .guest-avatar {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   color: white;
   font-weight: 600;
+  font-size: 0.75rem;
 }
 
 .guest-name {
   font-weight: 500;
+  color: #1e293b;
 }
 
-.amount-text {
+.amount-text,
+.subtotal-amount {
   font-weight: 600;
   color: #059669;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-.nights-badge {
-  background: #e0e7ff;
-  color: #3730a3;
+.nights-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #dbeafe;
+  color: #1e40af;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   font-size: 0.875rem;
   font-weight: 500;
+  min-width: 2rem;
+  height: 1.75rem;
 }
 
-.total-amount-cell {
-  font-weight: 700;
-  color: #1f2937;
-  font-size: 1.1rem;
+/* Halls Table Styles */
+.hall-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.cost-breakdown {
-  max-width: 600px;
-  margin: 0 auto;
+.hall-icon {
+  color: #f59e0b;
+  font-size: 1.2rem;
+  background: #fef3c7;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
 }
 
-.cost-items {
+.hall-info {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
 }
 
-.cost-item {
+.hall-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+.booking-date {
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.duration-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ecfdf5;
+  color: #065f46;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid #d1fae5;
+}
+
+.price-text,
+.hall-total-amount {
+  font-weight: 600;
+  color: #f59e0b;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.hall-total-amount {
+  color: #059669;
+  font-size: 1.05rem;
+}
+
+/* Invoice Summary */
+.invoice-summary {
+  max-width: 500px;
+  margin-left: auto;
+}
+
+.summary-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.summary-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: 0.75rem 0;
 }
 
-.cost-label {
-  display: flex;
-  align-items: center;
+.summary-label {
   color: #374151;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  flex: 1;
 }
 
-.meal-rate {
+.meal-details {
+  display: block;
   color: #6b7280;
-  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
 }
 
-.cost-value {
+.summary-value {
   font-weight: 600;
-  color: #1f2937;
-  font-size: 1.1rem;
+  color: #1e293b;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  margin-left: 2rem;
 }
 
-.grand-total {
-  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
-  margin: 0.5rem -1rem 0 -1rem;
-  padding: 1rem;
+.tax-item {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.summary-divider {
+  margin: 0.5rem 0;
+}
+
+.total-item {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  margin: 0.5rem -1rem 0;
+  padding: 1.25rem 1.5rem;
   border-radius: 0.75rem;
+  border: 2px solid #cbd5e1;
 }
 
-.grand-total-value {
+.total-value {
   font-size: 1.5rem;
   font-weight: 700;
   color: #059669;
 }
 
+/* Terms and Conditions */
+.terms-content {
+  color: #4b5563;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.terms-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style-type: disc;
+}
+
+.terms-list li {
+  margin-bottom: 0.5rem;
+  color: #6b7280;
+}
+
+.invoice-footer {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.thank-you {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+}
+
+.contact-info {
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Payment Dialog */
+.payment-dialog :deep(.p-dialog-header) {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  color: white;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.payment-dialog :deep(.p-dialog-title) {
+  color: white;
+  font-weight: 600;
+}
+
+.payment-dialog-content {
+  padding: 1.5rem 0;
+}
+
+.payment-summary {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e2e8f0;
+}
+
+.payment-amount-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.amount-label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 1rem;
+}
+
+.amount-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #059669;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.payment-method-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.payment-method-label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.payment-dropdown {
+  font-size: 0.95rem;
+}
+
+.payment-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0;
+}
+
+/* Print Styles */
+@media print {
+  .corporate-bill {
+    background: white;
+    color: black;
+  }
+
+  .bill-header {
+    background: white;
+    color: black;
+    border-bottom: 2px solid #000;
+    page-break-after: avoid;
+  }
+
+  .hotel-name {
+    -webkit-text-fill-color: black;
+    color: black;
+  }
+
+  .hotel-tagline,
+  .hotel-contact {
+    color: #666;
+  }
+
+  .invoice-title {
+    color: black;
+  }
+
+  .header-actions,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .accommodation-card,
+  .halls-card,
+  .summary-card,
+  .terms-card,
+  .bill-to-card,
+  .stay-details-card {
+    background: white;
+    box-shadow: none;
+    border: 1px solid #ddd;
+    page-break-inside: avoid;
+  }
+
+  .professional-table :deep(.p-datatable-thead > tr > th) {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+  }
+
+  .professional-table :deep(.p-datatable-tbody > tr > td) {
+    border: 1px solid #ddd;
+  }
+
+  .total-item {
+    background: #f9f9f9;
+    border: 2px solid #333;
+  }
+
+  .print-visible {
+    display: block !important;
+  }
+}
+
 /* Responsive Design */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .header-content {
-    flex-direction: column;
-    gap: 1.5rem;
+    grid-template-columns: 1fr;
+    gap: 2rem;
     text-align: center;
   }
 
-  .header-left {
-    flex-direction: column;
-    gap: 1rem;
+  .invoice-details {
+    text-align: center;
   }
 
-  .page-title {
+  .invoice-item {
+    justify-content: center;
+    margin: 0 auto;
+  }
+
+  .header-actions {
+    position: static;
+    justify-content: center;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .billing-parties {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .bill-content {
+    padding: 0 1rem 3rem;
+  }
+
+  .header-content {
+    padding: 0 1rem;
+  }
+
+  .hotel-branding {
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+  }
+
+  .hotel-name {
     font-size: 2rem;
   }
 
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .bill-content {
-    padding: 0 1rem 2rem 1rem;
-  }
-
-  .quick-stats {
-    grid-template-columns: 1fr;
-    gap: 1rem;
+  .invoice-title {
+    font-size: 1.5rem;
   }
 
   .header-actions {
@@ -1162,54 +2352,46 @@ onMounted(async () => {
     width: 100%;
   }
 
-  .header-actions .p-button {
-    width: 100%;
+  .professional-table :deep(.p-datatable-wrapper) {
+    overflow-x: auto;
   }
 
-  .error-actions {
+  .invoice-summary {
+    margin: 0;
+  }
+
+  .summary-item {
     flex-direction: column;
-    width: 100%;
+    align-items: flex-start;
+    gap: 0.5rem;
   }
 
-  .error-actions .p-button {
-    width: 100%;
+  .summary-value {
+    margin-left: 0;
+  }
+
+  .payment-dialog {
+    width: 95vw !important;
   }
 }
 
-/* Print Styles */
-@media print {
-  .corporate-bill {
-    background: white;
+@media (max-width: 480px) {
+  .hotel-contact {
+    font-size: 0.8rem;
   }
 
-  .bill-header {
-    background: white;
-    border-bottom: 2px solid #e5e7eb;
+  .invoice-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
   }
 
-  .info-card,
-  .guests-card,
-  .summary-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    box-shadow: none;
+  .billing-parties {
+    gap: 1rem;
   }
 
-  .enhanced-table {
-    border: 1px solid #e5e7eb;
-  }
-
-  .print\:hidden {
-    display: none !important;
-  }
-
-  .cost-item {
-    border-bottom: 1px solid #f3f4f6;
-  }
-
-  .grand-total {
-    background: #f9fafb;
-    border: 2px solid #e5e7eb;
+  .invoice-sections {
+    gap: 1.5rem;
   }
 }
 </style>
