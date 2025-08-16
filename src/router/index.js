@@ -392,7 +392,8 @@ const routes = [
     {
         path: '',
         name: 'landing',
-        component: () => import('@/views/pages/Landing.vue')
+        // component: () => import('@/views/pages/Landing.vue')
+        component: () => import('@/views/pages/auth/Login.vue')
     },
     {
         path: '/pages/notfound',

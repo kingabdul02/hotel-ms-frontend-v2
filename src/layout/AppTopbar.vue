@@ -115,7 +115,7 @@ const performLogout = async () => {
         <router-link :to="`/dashboard/landing`">
             <span class="layout-topbar-logo">
                 <img :src="logoUrl" alt="logo" />
-                <span class="font-bold text-xl">NBTE Consult Limited</span>
+                <span class="font-bold text-xl">Al-Ihsan Metro Hotels</span>
             </span>
         </router-link>
 

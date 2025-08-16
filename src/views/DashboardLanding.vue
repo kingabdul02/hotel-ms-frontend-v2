@@ -5,6 +5,20 @@ import { useRouter } from 'vue-router';
 const router = useRouter();
 
 const modules = ref([
+      {
+        title: 'Booking Management',
+        description: 'Manages room bookings, check-ins, and check-outs.',
+        image: '/img/building/nbte-4.jpeg',
+        features: ['Booking Overview', 'Check-Ins', 'Check-Outs'],
+        route: '/admin/booking/dashboard'
+    },
+     {
+        title: 'Housekeeping',
+        description: 'Manages room status, cleaning schedules, and staff assignments.',
+        image: '/img/bed-1.jpeg',
+        features: ['Room Status', 'Cleaning Schedules', 'Staff Assignments'],
+        route: '/admin/housekeeping/dashboard'
+    },
     {
         title: 'Inventory',
         description: 'Tracks information about . . .',
@@ -12,20 +26,13 @@ const modules = ref([
         features: ['Inventory Reports', 'Suppliers', 'Orders'],
         route: '/inventory/dashboard'
     },
-    {
-        title: 'Hotel Booking',
-        description: 'Tracks information about . . .',
-        image: '/img/building/nbte-4.jpeg',
-        features: ['Bookings Reports', 'Listings', 'Notifications'],
-        route: '/admin/booking/dashboard'
-    },
-    {
-        title: 'Housekeeping',
-        description: 'Manages room status, cleaning schedules, and staff assignments.',
-        image: '/img/bed-1.jpeg',
-        features: ['Room Status', 'Cleaning Schedules', 'Staff Assignments'],
-        route: '/admin/housekeeping/dashboard'
-    },
+    // {
+    //     title: 'POS',
+    //     description: 'Point of Sale system for managing transactions.',
+    //     image: '/img/pos.png',
+    //     features: ['POS Transactions', 'Charges', 'Payment Processing'],
+    //     route: '/pos/dashboard'
+    // },
     {
         title: 'Settings',
         description: 'Configuration of Booking & Inventory Parameters for the system',
@@ -39,7 +46,7 @@ const modules = ref([
         image: '/img/nbte-bg.jpeg',
         features: ['Revenue Dashboard', 'KPIs & Trends', 'Room Type Performance'],
         route: '/revenue/dashboard'
-    }
+    },
 ]);
 
 // Carousel state

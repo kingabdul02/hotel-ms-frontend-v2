@@ -2,7 +2,7 @@
     <div class="layout-topbar">
         <router-link to="/" class="layout-topbar-logo">
             <img :src="logoUrl" alt="logo" />
-            <span class="font-bold">NBTE Consult Limited</span>
+            <span class="font-bold">Al-Ihsan Metro Hotels</span>
         </router-link>
 
         <button class="p-link layout-topbar-menu-button layout-topbar-button" @click="onTopBarMenuButton()">
