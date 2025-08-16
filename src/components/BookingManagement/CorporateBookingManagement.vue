@@ -12,12 +12,105 @@ import ProgressSpinner from 'primevue/progressspinner';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
+import Menu from 'primevue/menu';
 import { useCorporateBooking } from '@/composables/useCorporateBooking';
+import { CorporateBookingService } from '@/service/CorporateBookingService';
+
+// Corporate charges integration
+const corporateBookingService = new CorporateBookingService();
+
+const corporateCharges = ref([]);
+const corporatePOSCharges = ref([]);
+const showChargesDialog = ref(false);
+const showPOSChargesDialog = ref(false);
+const selectedCorporateBookingId = ref(null);
+
+// New: forms for adding charges/POS in dialogs
+type CorporateChargeItem = { description: string; amount: number | null; quantity: number | null; category?: string };
+type CorporatePOSItem = { item_id: string; unit_price: number | null; quantity: number | null; outlet_id?: string; payment_status?: string };
+
+const chargesFormItems = ref<CorporateChargeItem[]>([
+  { description: '', amount: null, quantity: 1, category: '' },
+]);
+const chargesNotes = ref('');
+const chargesMarkAsPaid = ref(false);
+const chargesTotal = computed(() =>
+  (chargesFormItems.value || []).reduce((sum, i) => sum + (Number(i.amount) || 0) * (Number(i.quantity) || 0), 0)
+);
+
+const posFormItems = ref<CorporatePOSItem[]>([
+  { item_id: '', unit_price: null, quantity: 1, outlet_id: '', payment_status: 'pending' },
+]);
+const posMarkAsPaid = ref(false);
+const posTotal = computed(() =>
+  (posFormItems.value || []).reduce((sum, i) => sum + (Number(i.unit_price) || 0) * (Number(i.quantity) || 0), 0)
+);
+
+const resetChargesForm = () => {
+  chargesFormItems.value = [{ description: '', amount: null, quantity: 1, category: '' }];
+  chargesNotes.value = '';
+  chargesMarkAsPaid.value = false;
+};
+
+const resetPOSForm = () => {
+  posFormItems.value = [{ item_id: '', unit_price: null, quantity: 1, outlet_id: '', payment_status: 'pending' }];
+  posMarkAsPaid.value = false;
+};
+
+const fetchCorporateCharges = async (corporateBookingId) => {
+  try {
+  const res = await corporateBookingService.getCorporateBookingCharges(corporateBookingId);
+    corporateCharges.value = res.charges || [];
+    selectedCorporateBookingId.value = corporateBookingId;
+  selectedCorporateBooking.value = corporateBookings.value.find((b:any)=>b.id===corporateBookingId) || null;
+  resetChargesForm();
+    showChargesDialog.value = true;
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch charges', life: 3000 });
+  }
+};
+
+const addCorporateCharges = async (charges) => {
+  if (!selectedCorporateBookingId.value) return;
+  try {
+    await corporateBookingService.addCorporateBookingCharges(selectedCorporateBookingId.value, charges);
+    await fetchCorporateCharges(selectedCorporateBookingId.value);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Charges added', life: 3000 });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to add charges', life: 3000 });
+  }
+};
+
+const fetchCorporatePOSCharges = async (corporateBookingId) => {
+  try {
+  const res = await corporateBookingService.getCorporatePOSCharges(corporateBookingId);
+    corporatePOSCharges.value = res.pos_charges || [];
+    selectedCorporateBookingId.value = corporateBookingId;
+  selectedCorporateBooking.value = corporateBookings.value.find((b:any)=>b.id===corporateBookingId) || null;
+  resetPOSForm();
+    showPOSChargesDialog.value = true;
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch POS charges', life: 3000 });
+  }
+};
+
+const addCorporatePOSCharges = async (items) => {
+  if (!selectedCorporateBookingId.value) return;
+  try {
+    await corporateBookingService.addCorporatePOSCharges(selectedCorporateBookingId.value, items);
+    await fetchCorporatePOSCharges(selectedCorporateBookingId.value);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'POS charges added', life: 3000 });
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to add POS charges', life: 3000 });
+  }
+};
 import { useRouter } from 'vue-router';
 import StatisticsCards from './StatisticsCards.vue';
 import EditCorporateBookingModal from './EditCorporateBookingModal.vue';
 import CorporateBookingForm from './CorporateBookingForm.vue';
 import GuestBill from './GuestBill.vue';
+import CorporateCustomChargesDialog from './CorporateCustomChargesDialog.vue';
+import CorporatePOSChargesDialog from './CorporatePOSChargesDialog.vue';
 
 
 // Constants
@@ -130,6 +223,25 @@ const selectedBookingForBill = ref(null);
 const selectedGuestForBill = ref(null);
 const billContent = ref(null);
 const rows = ref(10); // pagination rows per page
+const selectedCorporateBooking = ref<any | null>(null);
+// actions menu
+const actionMenu = ref();
+const selectedRow = ref<any | null>(null);
+const openActions = (event: Event, row: any) => { selectedRow.value = row; actionMenu.value?.toggle(event); };
+const actionMenuItems = computed(() => {
+  const row = selectedRow.value as any | null;
+  const isCompleted = row ? row.guests?.length > 0 && row.guests.every((g:any)=>g.is_checked_out) : false;
+  const canCheckIn = row ? row.guests?.some((g:any)=>!g.is_checked_in && !g.is_checked_out) : false;
+  const canCheckOut = row ? row.guests?.some((g:any)=>g.is_checked_in && !g.is_checked_out) : false;
+  const items: any[] = [];
+  if (canCheckIn) items.push({ label: 'Check In All', icon: 'pi pi-sign-in', command: () => row && handleBookingCheckIn(row) });
+  if (canCheckOut) items.push({ label: 'Check Out All', icon: 'pi pi-sign-out', command: () => row && handleBookingCheckOut(row) });
+  if (!isCompleted) items.push({ label: 'Edit Booking', icon: 'pi pi-pencil', command: () => row && openEditBookingDialog(row) });
+  items.push({ label: 'View Bill', icon: 'pi pi-file-pdf', command: () => row && viewBill(row) });
+  if (!isCompleted) items.push({ label: 'Add Custom Charges', icon: 'pi pi-plus-circle', command: () => row && fetchCorporateCharges(row.id) });
+  if (!isCompleted) items.push({ label: 'Add POS Charges', icon: 'pi pi-shopping-cart', command: () => row && fetchCorporatePOSCharges(row.id) });
+  return items;
+});
 
 const ITEMS_PER_PAGE = 10;
 
@@ -640,50 +752,9 @@ watch(
               </template>
             </Column>
 
-            <Column header="Actions" style="min-width: 280px">
+            <Column header="Actions" style="width:3rem; text-align:right;">
               <template #body="{ data }">
-                <div class="action-buttons">
-                  <!-- Check-in button -->
-                  <Button
-                    v-if="canBookingCheckIn(data)"
-                    icon="pi pi-sign-in"
-                    class="p-button-sm p-button-success"
-                    @click="handleBookingCheckIn(data)"
-                    v-tooltip="'Check in all guests'"
-                  />
-                  
-                  <!-- Check-out button -->
-                  <Button
-                    v-else-if="canBookingCheckOut(data)"
-                    icon="pi pi-sign-out"
-                    class="p-button-sm p-button-warning"
-                    @click="handleBookingCheckOut(data)"
-                    v-tooltip="'Check out all guests'"
-                  />
-                  
-                  <!-- Completed status -->
-                  <div
-                    v-else-if="isBookingCompleted(data)"
-                    class="completed-status-small"
-                  >
-                    <i class="pi pi-check-circle"></i>
-                    <span>Completed</span>
-                  </div>
-                  
-                    <Button
-                    v-if="!isBookingCompleted(data)"
-                    icon="pi pi-pencil"
-                    class="p-button-sm p-button-outlined"
-                    @click="openEditBookingDialog(data)"
-                    v-tooltip="'Edit Booking'"
-                    />
-                  <Button
-                    icon="pi pi-file-pdf"
-                    class="p-button-sm p-button-outlined p-button-info"
-                    @click="viewBill(data)"
-                    v-tooltip="'View Bill'"
-                  />
-                </div>
+                <Button icon="pi pi-ellipsis-v" class="p-button-text p-button-rounded" @click="(e) => openActions(e, data)" aria-label="Actions" />
               </template>
             </Column>
 
@@ -921,9 +992,25 @@ watch(
       </template>
     </Dialog>
 
+    <!-- Corporate dialogs -->
+    <CorporateCustomChargesDialog
+      :visible="showChargesDialog"
+      :booking="selectedCorporateBooking"
+      @update:visible="showChargesDialog = $event"
+      @charges-added="() => { showChargesDialog = false; if (selectedCorporateBookingId) fetchCorporateCharges(selectedCorporateBookingId); }"
+    />
+    <CorporatePOSChargesDialog
+      :visible="showPOSChargesDialog"
+      :booking="selectedCorporateBooking"
+      @update:visible="showPOSChargesDialog = $event"
+      @charges-posted="() => { showPOSChargesDialog = false; if (selectedCorporateBookingId) fetchCorporatePOSCharges(selectedCorporateBookingId); }"
+    />
+
+
     <!-- Global Components -->
     <ConfirmDialog />
     <Toast />
+  <Menu ref="actionMenu" :model="actionMenuItems" :popup="true" />
   </div>
 </template>
 
