@@ -810,7 +810,12 @@ const printBill = async () => {
 
 
 const goBack = () => {
-  router.push({ name: 'CorporateBookings' })
+  // Prefer navigating back if there is history; otherwise go to Booking Management
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push({ name: 'managebookings' });
+  }
 }
 
 const confirmPrint = () => {
@@ -1033,7 +1038,7 @@ onMounted(async () => {
         life: 3000 
       })
       setTimeout(() => {
-        router.push({ name: 'CorporateBookings' })
+        router.push({ name: 'managebookings' })
       }, 2000)
       return
     }

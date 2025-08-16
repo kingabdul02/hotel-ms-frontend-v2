@@ -127,12 +127,6 @@ const routes = [
                 meta: { auth: true }
             },
             {
-                path: '/corporate-bill/:reservation_code',
-                name: 'CorporateBill',
-                component: () => import('@/components/BookingManagement/CorporateBill.vue'),
-                meta: { auth: true }
-              },
-            {
                 path: '/admin/booking/manage/listings',
                 name: 'managelistings',
                 component: () => import('@/views/ManageListings.vue'),
@@ -286,6 +280,19 @@ const routes = [
                 path: '/revenue/dashboard',
                 name: 'revenuedashboard',
                 component: () => import('@/views/RevenueDashboard.vue'),
+                meta: { auth: true }
+            }
+        ]
+    },
+    // Ensure CorporateBill uses AppLayout (sidebar/topbar) at the desired URL
+    {
+        path: '/corporate-bill/:reservation_code',
+        component: AppLayout,
+        children: [
+            {
+                path: '',
+                name: 'CorporateBill',
+                component: () => import('@/components/BookingManagement/CorporateBill.vue'),
                 meta: { auth: true }
             }
         ]

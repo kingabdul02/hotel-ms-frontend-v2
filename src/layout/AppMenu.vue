@@ -80,18 +80,18 @@ const model = ref([
                 to: '/admin/booking/management',
                 visible: route.path.includes('/booking'), // Check for '/booking' in the path
             },
-            {
-                label: 'Listings',
-                icon: 'pi pi-fw pi-sort-amount-up',
-                to: '/admin/booking/manage/listings',
-                visible: route.path.includes('/booking'), // Check for '/booking' in the path
-            },
-            {
-                label: 'Notifications',
-                icon: 'pi pi-fw pi-bell',
-                to: '/admin/bookings/notifications',
-                visible: route.path.includes('/booking'), // Check for '/booking' in the path
-            },
+            // {
+            //     label: 'Listings',
+            //     icon: 'pi pi-fw pi-sort-amount-up',
+            //     to: '/admin/booking/manage/listings',
+            //     visible: route.path.includes('/booking'), // Check for '/booking' in the path
+            // },
+            // {
+            //     label: 'Notifications',
+            //     icon: 'pi pi-fw pi-bell',
+            //     to: '/admin/bookings/notifications',
+            //     visible: route.path.includes('/booking'), // Check for '/booking' in the path
+            // },
             // Housekeeping Menus
             {
                 label: 'Dashboard',
@@ -409,7 +409,13 @@ const sectionFor = (to) => {
 watch(
     () => route.path,
     (path) => {
-        const show = (seg) => path.includes(`/${seg}`);
+        const show = (seg) => {
+            // Default: show when current path contains the section segment
+            if (path.includes(`/${seg}`)) return true;
+            // Map Corporate Bill pages to the Booking section so booking menus show up
+            if (seg === 'booking' && (path.startsWith('/corporate-bill') || path.startsWith('/corporate'))) return true;
+            return false;
+        };
         model.value.forEach(group => {
             group.items?.forEach(item => {
                 const seg = sectionFor(item.to);

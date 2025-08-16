@@ -65,7 +65,22 @@ const itemClick = (event, item) => {
 };
 
 const checkActiveRoute = (item) => {
-    return route.path === item.to;
+    const path = route.path || '';
+    const to = item?.to || '';
+
+    // Exact match
+    if (path === to) return true;
+
+    // Mark parent entries active on their nested child routes
+    if (to && path.startsWith(to + '/')) return true;
+
+    // Map non-module routes to a module menu item for visual context
+    // Corporate bill pages should highlight the Bookings menu
+    if ((path.startsWith('/corporate-bill') || path.startsWith('/corporate')) && to === '/admin/booking/management') {
+        return true;
+    }
+
+    return false;
 };
 </script>
 
